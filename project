@@ -1,0 +1,2908 @@
+# Complete Implementation Guide for Antigravity
+## Documentation Consistency Enforcer Project
+
+---
+
+# 📋 TABLE OF CONTENTS
+
+1. [Project Overview for Antigravity](#project-overview)
+2. [Complete Technical Specification](#technical-specification)
+3. [Backend Implementation Instructions](#backend-implementation)
+4. [Frontend Implementation Instructions](#frontend-implementation)
+5. [Database Schema & Setup](#database-setup)
+6. [API Documentation](#api-documentation)
+7. [Deployment Instructions](#deployment-instructions)
+8. [Testing Requirements](#testing-requirements)
+9. [Environment Configuration](#environment-configuration)
+10. [Step-by-Step Setup Guide](#setup-guide)
+
+---
+
+# 1. PROJECT OVERVIEW FOR ANTIGRAVITY {#project-overview}
+
+## What We're Building
+
+A fully automated system that monitors GitHub repositories for code changes and automatically updates documentation using AI agents. When a developer changes code, the system:
+
+1. Detects the change via GitHub webhooks
+2. Analyzes what documentation needs updating
+3. Uses AI to generate documentation updates
+4. Creates pull requests with the updates
+5. Learns from feedback to improve over time
+
+## Technology Stack
+
+**Backend:**
+- Python 3.11+ with FastAPI framework
+- PostgreSQL database
+- Redis for message queuing
+- DigitalOcean Gradient™ AI Platform (AI Agent)
+
+**Frontend:**
+- React 18 with TypeScript
+- Tailwind CSS for styling
+- Shadcn/ui component library
+- TanStack Query for API calls
+
+**Infrastructure:**
+- DigitalOcean App Platform (hosting)
+- DigitalOcean Managed Databases (PostgreSQL, Redis)
+- GitHub OAuth for authentication
+
+## User Flow
+
+```
+1. User signs up → OAuth with GitHub
+2. User connects repositories → Selects which repos to monitor
+3. User configures settings → Sets preferences (auto-merge, notifications, etc.)
+4. System monitors repos → Webhook receives code changes
+5. AI Agent processes → Analyzes and generates doc updates
+6. System creates PR → Submits to GitHub for review
+7. User reviews PR → Accepts, rejects, or edits
+8. System learns → Improves based on feedback
+```
+
+---
+
+# 2. COMPLETE TECHNICAL SPECIFICATION {#technical-specification}
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         FRONTEND                             │
+│                    (React + TypeScript)                      │
+│                                                              │
+│  Pages:                                                      │
+│  - Dashboard (repository overview)                           │
+│  - Repository Settings                                       │
+│  - Documentation Updates (PR queue)                          │
+│  - Analytics & Metrics                                       │
+│  - Account Settings                                          │
+└─────────────────────────────────────────────────────────────┘
+                            ↓ HTTPS
+┌─────────────────────────────────────────────────────────────┐
+│                      BACKEND API                             │
+│                   (FastAPI - Python)                         │
+│                                                              │
+│  Endpoints:                                                  │
+│  - /api/auth/* (GitHub OAuth)                               │
+│  - /api/repositories/* (CRUD operations)                    │
+│  - /api/webhooks/github (receive webhooks)                  │
+│  - /api/documentation-updates/* (manage PRs)                │
+│  - /api/metrics/* (analytics)                               │
+└─────────────────────────────────────────────────────────────┘
+                            ↓
+┌──────────────────┬──────────────────┬──────────────────────┐
+│   PostgreSQL     │      Redis       │  DigitalOcean        │
+│   (Main DB)      │  (Message Queue) │  Gradient™ AI Agent  │
+└──────────────────┴──────────────────┴──────────────────────┘
+                            ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    BACKGROUND WORKERS                        │
+│                                                              │
+│  - Webhook Processor (consume Redis queue)                  │
+│  - Agent Orchestrator (coordinate AI agents)                │
+│  - PR Creator (submit to GitHub)                            │
+│  - Learning Worker (process feedback)                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Component Breakdown
+
+### Backend Components (6 main modules)
+
+1. **API Server** (`src/api/`)
+   - Authentication routes
+   - Repository management routes
+   - Webhook receiver routes
+   - Documentation update routes
+   - Metrics routes
+
+2. **Agent Client** (`src/agents/`)
+   - DigitalOcean Gradient™ API client
+   - Role-based agent invoker (watcher, analyzer, generator, etc.)
+   - Response parser and validator
+
+3. **GitHub Integration** (`src/integrations/github/`)
+   - OAuth authentication
+   - Webhook validation
+   - Repository API client
+   - PR creation and management
+
+4. **Background Workers** (`src/workers/`)
+   - Webhook event processor
+   - Agent orchestrator
+   - PR creator worker
+   - Feedback processor
+
+5. **Database Models** (`src/models/`)
+   - User, Repository, DocumentationUpdate, AgentInvocation models
+   - SQLAlchemy ORM schemas
+
+6. **Core Services** (`src/services/`)
+   - Knowledge graph builder
+   - AST parser service
+   - Embedding service
+   - Notification service
+
+### Frontend Components (5 main pages + shared components)
+
+1. **Dashboard Page**
+   - Repository cards showing status
+   - Recent activity feed
+   - Quick stats (PRs created, acceptance rate)
+
+2. **Repository Settings Page**
+   - Enable/disable monitoring
+   - Configure trigger rules
+   - Set documentation mappings
+   - Notification preferences
+
+3. **Documentation Updates Page**
+   - List of pending/merged PRs
+   - Filter by status, repository
+   - Quick review interface
+   - Confidence score display
+
+4. **Analytics Page**
+   - Charts showing PR acceptance over time
+   - Documentation coverage metrics
+   - Agent performance stats
+   - Cost tracking
+
+5. **Account Settings Page**
+   - GitHub connection status
+   - API usage limits
+   - Billing information
+   - Notification preferences
+
+6. **Shared Components**
+   - Navigation bar
+   - Repository selector
+   - Confidence score badge
+   - PR status badge
+   - Code diff viewer
+
+---
+
+# 3. BACKEND IMPLEMENTATION INSTRUCTIONS {#backend-implementation}
+
+## Project Structure
+
+```
+backend/
+├── src/
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── auth.py              # Authentication endpoints
+│   │   ├── repositories.py      # Repository management
+│   │   ├── webhooks.py          # GitHub webhook receiver
+│   │   ├── documentation.py     # Documentation update endpoints
+│   │   └── metrics.py           # Analytics endpoints
+│   │
+│   ├── agents/
+│   │   ├── __init__.py
+│   │   ├── client.py            # DigitalOcean Gradient™ client
+│   │   ├── invoker.py           # Role-based agent invoker
+│   │   └── parser.py            # Response parser
+│   │
+│   ├── integrations/
+│   │   └── github/
+│   │       ├── __init__.py
+│   │       ├── oauth.py         # OAuth flow
+│   │       ├── client.py        # GitHub API client
+│   │       ├── webhooks.py      # Webhook validation
+│   │       └── pr_manager.py    # PR creation
+│   │
+│   ├── workers/
+│   │   ├── __init__.py
+│   │   ├── webhook_processor.py # Process webhook events
+│   │   ├── orchestrator.py      # Coordinate agents
+│   │   ├── pr_creator.py        # Create GitHub PRs
+│   │   └── feedback_processor.py # Learn from feedback
+│   │
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── user.py              # User model
+│   │   ├── repository.py        # Repository model
+│   │   ├── documentation_update.py
+│   │   ├── agent_invocation.py
+│   │   └── feedback.py
+│   │
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── knowledge_graph.py   # Code-to-doc mapping
+│   │   ├── ast_parser.py        # Parse code changes
+│   │   ├── embeddings.py        # Generate embeddings
+│   │   └── notifications.py     # Send notifications
+│   │
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── config.py            # Configuration
+│   │   ├── database.py          # Database connection
+│   │   ├── redis_client.py      # Redis connection
+│   │   └── security.py          # Authentication utilities
+│   │
+│   └── main.py                  # FastAPI application entry
+│
+├── alembic/                     # Database migrations
+│   ├── versions/
+│   └── env.py
+│
+├── tests/
+│   ├── test_api/
+│   ├── test_agents/
+│   ├── test_workers/
+│   └── conftest.py
+│
+├── requirements.txt
+├── pyproject.toml
+├── Dockerfile
+└── README.md
+```
+
+## Detailed File-by-File Implementation
+
+### File 1: `src/main.py`
+
+**Purpose:** Main FastAPI application entry point
+
+**Instructions for Antigravity:**
+
+```python
+"""
+Main FastAPI application entry point.
+This file initializes the FastAPI app, sets up middleware, includes routers, and configures CORS.
+"""
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+import logging
+
+from src.api import auth, repositories, webhooks, documentation, metrics
+from src.core.config import settings
+from src.core.database import engine, Base
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Create database tables
+Base.metadata.create_all(bind=engine)
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Documentation Consistency Enforcer API",
+    description="AI-powered documentation synchronization system",
+    version="1.0.0",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc"
+)
+
+# CORS middleware - allow frontend to communicate
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,  # ["http://localhost:3000", "https://yourdomain.com"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Gzip compression for responses
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "version": "1.0.0"
+    }
+
+# Include API routers
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(repositories.router, prefix="/api/repositories", tags=["Repositories"])
+app.include_router(webhooks.router, prefix="/api/webhooks", tags=["Webhooks"])
+app.include_router(documentation.router, prefix="/api/documentation-updates", tags=["Documentation"])
+app.include_router(metrics.router, prefix="/api/metrics", tags=["Metrics"])
+
+# Startup event
+@app.on_event("startup")
+async def startup_event():
+    logger.info("Starting Documentation Consistency Enforcer API")
+    # Initialize connections, load configurations, etc.
+
+# Shutdown event
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Shutting down Documentation Consistency Enforcer API")
+    # Clean up connections
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "src.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=settings.DEBUG
+    )
+```
+
+**Key Requirements:**
+- Must support CORS for frontend communication
+- Must include all API routers
+- Must have health check endpoint for monitoring
+- Must configure logging properly
+- Must create database tables on startup
+
+---
+
+### File 2: `src/core/config.py`
+
+**Purpose:** Central configuration management using environment variables
+
+```python
+"""
+Application configuration.
+Loads settings from environment variables with validation.
+"""
+
+from pydantic_settings import BaseSettings
+from typing import List
+import os
+
+class Settings(BaseSettings):
+    """Application settings loaded from environment variables"""
+    
+    # Application
+    APP_NAME: str = "Documentation Consistency Enforcer"
+    DEBUG: bool = False
+    SECRET_KEY: str  # REQUIRED - for JWT token signing
+    
+    # Database
+    DATABASE_URL: str  # REQUIRED - PostgreSQL connection string
+    # Example: postgresql://user:password@localhost:5432/doc_enforcer
+    
+    # Redis
+    REDIS_URL: str  # REQUIRED - Redis connection string
+    # Example: redis://localhost:6379/0
+    
+    # GitHub OAuth
+    GITHUB_CLIENT_ID: str  # REQUIRED
+    GITHUB_CLIENT_SECRET: str  # REQUIRED
+    GITHUB_REDIRECT_URI: str  # REQUIRED
+    # Example: https://yourdomain.com/api/auth/github/callback
+    
+    # DigitalOcean Gradient AI
+    DIGITALOCEAN_API_TOKEN: str  # REQUIRED - Your DO API token
+    AGENT_ID: str  # REQUIRED - Your agent ID from Gradient platform
+    
+    # CORS
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:3000",  # Local frontend development
+        "https://yourdomain.com"   # Production frontend
+    ]
+    
+    # Agent Configuration
+    AGENT_MODEL: str = "claude-3-5-sonnet-20241022"
+    AGENT_MAX_TOKENS: int = 4096
+    AGENT_TEMPERATURE: float = 0.3
+    
+    # Thresholds
+    MIN_CONFIDENCE_THRESHOLD: float = 0.7  # Don't create PR if confidence < this
+    AUTO_MERGE_THRESHOLD: float = 0.95     # Auto-merge if confidence >= this
+    
+    # Rate Limits
+    MAX_WEBHOOKS_PER_MINUTE: int = 100
+    MAX_AGENT_CALLS_PER_HOUR: int = 1000
+    
+    # Notifications
+    SLACK_WEBHOOK_URL: str = ""  # Optional
+    SENDGRID_API_KEY: str = ""   # Optional
+    
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+
+# Global settings instance
+settings = Settings()
+```
+
+**Key Requirements:**
+- Must use pydantic-settings for validation
+- Must load from .env file
+- All secrets must be from environment variables (never hardcoded)
+- Must validate required fields on startup
+
+---
+
+### File 3: `src/core/database.py`
+
+**Purpose:** Database connection and session management
+
+```python
+"""
+Database connection and session management using SQLAlchemy.
+"""
+
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from src.core.config import settings
+
+# Create SQLAlchemy engine
+engine = create_engine(
+    settings.DATABASE_URL,
+    pool_pre_ping=True,  # Verify connections before using
+    pool_size=10,
+    max_overflow=20
+)
+
+# Create session factory
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Base class for models
+Base = declarative_base()
+
+# Dependency for getting database session in routes
+def get_db():
+    """
+    FastAPI dependency for database sessions.
+    Usage in routes: db: Session = Depends(get_db)
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+```
+
+**Key Requirements:**
+- Must use connection pooling
+- Must have proper session cleanup (finally block)
+- Must be injectable as FastAPI dependency
+
+---
+
+### File 4: `src/core/redis_client.py`
+
+**Purpose:** Redis client for message queue
+
+```python
+"""
+Redis client for message queue and caching.
+"""
+
+import redis
+import json
+from typing import Any, Optional
+from src.core.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
+
+class RedisClient:
+    """Redis client wrapper for queue operations"""
+    
+    def __init__(self):
+        self.client = redis.from_url(
+            settings.REDIS_URL,
+            decode_responses=True
+        )
+    
+    def enqueue(self, queue_name: str, data: dict) -> bool:
+        """
+        Add item to queue.
+        
+        Args:
+            queue_name: Name of the queue (e.g., 'webhook_events')
+            data: Dictionary to enqueue (will be JSON serialized)
+        
+        Returns:
+            True if successful
+        """
+        try:
+            serialized = json.dumps(data)
+            self.client.rpush(queue_name, serialized)
+            logger.info(f"Enqueued to {queue_name}: {data.get('event_id', 'unknown')}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to enqueue to {queue_name}: {e}")
+            return False
+    
+    def dequeue(self, queue_name: str, timeout: int = 5) -> Optional[dict]:
+        """
+        Remove and return item from queue (blocking).
+        
+        Args:
+            queue_name: Name of the queue
+            timeout: Seconds to wait for item (0 = wait forever)
+        
+        Returns:
+            Deserialized dict or None if timeout
+        """
+        try:
+            result = self.client.blpop(queue_name, timeout=timeout)
+            if result:
+                _, data = result
+                return json.loads(data)
+            return None
+        except Exception as e:
+            logger.error(f"Failed to dequeue from {queue_name}: {e}")
+            return None
+    
+    def get_queue_size(self, queue_name: str) -> int:
+        """Get number of items in queue"""
+        return self.client.llen(queue_name)
+    
+    def set_cache(self, key: str, value: Any, expiration: int = 3600):
+        """Set cache with expiration in seconds"""
+        serialized = json.dumps(value)
+        self.client.setex(key, expiration, serialized)
+    
+    def get_cache(self, key: str) -> Optional[Any]:
+        """Get cached value"""
+        value = self.client.get(key)
+        if value:
+            return json.loads(value)
+        return None
+
+# Global Redis client instance
+redis_client = RedisClient()
+
+# Queue names
+WEBHOOK_QUEUE = "webhook_events"
+IMPACT_ANALYSIS_QUEUE = "impact_analysis"
+CONTENT_GENERATION_QUEUE = "content_generation"
+PR_CREATION_QUEUE = "pr_creation"
+```
+
+**Key Requirements:**
+- Must support queuing and dequeuing
+- Must handle JSON serialization
+- Must have proper error handling
+- Must support blocking pop for worker threads
+
+---
+
+### File 5: `src/models/user.py`
+
+**Purpose:** User database model
+
+```python
+"""
+User model for authentication and authorization.
+"""
+
+from sqlalchemy import Column, String, DateTime, Boolean
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+import uuid
+from datetime import datetime
+
+from src.core.database import Base
+
+class User(Base):
+    """User account model"""
+    
+    __tablename__ = "users"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    
+    # GitHub OAuth data
+    github_id = Column(String, unique=True, nullable=False, index=True)
+    github_username = Column(String, nullable=False)
+    github_email = Column(String)
+    github_access_token = Column(String, nullable=False)  # Encrypted in production
+    
+    # Profile
+    full_name = Column(String)
+    avatar_url = Column(String)
+    
+    # Account status
+    is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
+    
+    # Subscription/plan
+    plan = Column(String, default="free")  # free, pro, team, enterprise
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_login_at = Column(DateTime)
+    
+    # Relationships
+    repositories = relationship("Repository", back_populates="user", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<User {self.github_username}>"
+```
+
+**Key Requirements:**
+- Must use UUID for primary key
+- Must store GitHub OAuth token (encrypt in production)
+- Must have timestamps for created/updated
+- Must have relationship to repositories
+
+---
+
+### File 6: `src/models/repository.py`
+
+**Purpose:** Repository database model
+
+```python
+"""
+Repository model for tracking monitored GitHub repositories.
+"""
+
+from sqlalchemy import Column, String, DateTime, Boolean, Integer, JSON, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+import uuid
+from datetime import datetime
+
+from src.core.database import Base
+
+class Repository(Base):
+    """Monitored GitHub repository"""
+    
+    __tablename__ = "repositories"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    
+    # Owner reference
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    
+    # GitHub data
+    github_repo_id = Column(Integer, unique=True, nullable=False, index=True)
+    full_name = Column(String, nullable=False)  # e.g., "owner/repo"
+    owner = Column(String, nullable=False)
+    name = Column(String, nullable=False)
+    default_branch = Column(String, default="main")
+    
+    # Monitoring settings
+    enabled = Column(Boolean, default=True)
+    
+    # Configuration (stored as JSON)
+    config = Column(JSON, default={
+        "triggers": {
+            "public_api_changes": True,
+            "internal_api_changes": False,
+            "config_file_changes": True
+        },
+        "generation": {
+            "confidence_threshold": 0.7,
+            "auto_merge_threshold": 0.95
+        },
+        "notifications": {
+            "slack_enabled": False,
+            "email_enabled": True
+        }
+    })
+    
+    # Statistics
+    total_prs_created = Column(Integer, default=0)
+    total_prs_merged = Column(Integer, default=0)
+    total_prs_rejected = Column(Integer, default=0)
+    average_confidence_score = Column(Integer, default=0)  # Stored as percentage (0-100)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_webhook_at = Column(DateTime)
+    
+    # Relationships
+    user = relationship("User", back_populates="repositories")
+    documentation_updates = relationship("DocumentationUpdate", back_populates="repository", cascade="all, delete-orphan")
+    
+    def __repr__(self):
+        return f"<Repository {self.full_name}>"
+```
+
+**Key Requirements:**
+- Must store configuration as JSON
+- Must track statistics for analytics
+- Must have relationship to user and documentation updates
+- Configuration must have sensible defaults
+
+---
+
+### File 7: `src/models/documentation_update.py`
+
+**Purpose:** Track documentation update PRs
+
+```python
+"""
+Documentation update model for tracking generated PRs.
+"""
+
+from sqlalchemy import Column, String, DateTime, Integer, Text, ForeignKey, JSON, Enum
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+import uuid
+from datetime import datetime
+import enum
+
+from src.core.database import Base
+
+class UpdateStatus(enum.Enum):
+    """Status of documentation update"""
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    MERGED = "merged"
+    FAILED = "failed"
+
+class DocumentationUpdate(Base):
+    """Documentation update PR tracking"""
+    
+    __tablename__ = "documentation_updates"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    
+    # Repository reference
+    repository_id = Column(UUID(as_uuid=True), ForeignKey("repositories.id"), nullable=False)
+    
+    # Triggering event
+    trigger_commit_sha = Column(String, nullable=False)
+    trigger_commit_message = Column(Text)
+    trigger_author = Column(String)
+    
+    # GitHub PR data
+    pr_number = Column(Integer)
+    pr_url = Column(String)
+    pr_branch = Column(String)
+    
+    # Documentation changes
+    affected_files = Column(JSON, default=[])  # List of file paths
+    changes_summary = Column(Text)  # Human-readable summary
+    
+    # AI metadata
+    confidence_score = Column(Integer)  # 0-100
+    agent_role = Column(String)  # Which agent generated this
+    
+    # Status
+    status = Column(Enum(UpdateStatus), default=UpdateStatus.PENDING)
+    
+    # Review data
+    reviewed_by = Column(String)
+    reviewed_at = Column(DateTime)
+    rejection_reason = Column(String)
+    
+    # Human edits (for learning)
+    had_edits = Column(Boolean, default=False)
+    edit_summary = Column(Text)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    merged_at = Column(DateTime)
+    
+    # Relationships
+    repository = relationship("Repository", back_populates="documentation_updates")
+    
+    def __repr__(self):
+        return f"<DocumentationUpdate {self.id} - {self.status.value}>"
+```
+
+**Key Requirements:**
+- Must use Enum for status
+- Must track confidence score
+- Must store affected files as JSON
+- Must track review and edit information for learning
+
+---
+
+### File 8: `src/api/webhooks.py`
+
+**Purpose:** Receive and validate GitHub webhooks
+
+```python
+"""
+Webhook receiver endpoints for GitHub events.
+"""
+
+from fastapi import APIRouter, Request, HTTPException, Header, BackgroundTasks
+from fastapi.responses import JSONResponse
+import hmac
+import hashlib
+import json
+import logging
+
+from src.core.config import settings
+from src.core.redis_client import redis_client, WEBHOOK_QUEUE
+
+router = APIRouter()
+logger = logging.getLogger(__name__)
+
+def verify_github_signature(payload: bytes, signature: str) -> bool:
+    """
+    Verify GitHub webhook signature.
+    
+    Args:
+        payload: Raw request body
+        signature: X-Hub-Signature-256 header value
+    
+    Returns:
+        True if signature is valid
+    """
+    if not signature:
+        return False
+    
+    # GitHub sends signature as "sha256=<hash>"
+    if not signature.startswith("sha256="):
+        return False
+    
+    expected_signature = signature.split("=")[1]
+    
+    # Calculate HMAC
+    secret = settings.GITHUB_WEBHOOK_SECRET.encode()
+    computed_hash = hmac.new(secret, payload, hashlib.sha256).hexdigest()
+    
+    return hmac.compare_digest(computed_hash, expected_signature)
+
+@router.post("/github")
+async def receive_github_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    x_hub_signature_256: str = Header(None),
+    x_github_event: str = Header(None)
+):
+    """
+    Receive GitHub webhook events.
+    
+    GitHub sends webhooks for: push, pull_request, etc.
+    We're interested in 'push' events to detect code changes.
+    """
+    
+    # Read raw body for signature verification
+    body = await request.body()
+    
+    # Verify signature (security measure)
+    if not verify_github_signature(body, x_hub_signature_256):
+        logger.warning("Invalid webhook signature received")
+        raise HTTPException(status_code=401, detail="Invalid signature")
+    
+    # Parse payload
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    
+    # Log event type
+    logger.info(f"Received GitHub webhook: {x_github_event}")
+    
+    # Only process 'push' events for now
+    if x_github_event != "push":
+        return JSONResponse(
+            status_code=200,
+            content={"message": f"Event type '{x_github_event}' ignored"}
+        )
+    
+    # Extract key information
+    event_data = {
+        "event_type": x_github_event,
+        "repository": {
+            "full_name": payload.get("repository", {}).get("full_name"),
+            "owner": payload.get("repository", {}).get("owner", {}).get("login"),
+            "name": payload.get("repository", {}).get("name"),
+            "default_branch": payload.get("repository", {}).get("default_branch")
+        },
+        "commits": payload.get("commits", []),
+        "head_commit": payload.get("head_commit"),
+        "pusher": payload.get("pusher", {}).get("name"),
+        "ref": payload.get("ref")  # branch reference
+    }
+    
+    # Enqueue for background processing
+    success = redis_client.enqueue(WEBHOOK_QUEUE, event_data)
+    
+    if success:
+        logger.info(f"Webhook enqueued for {event_data['repository']['full_name']}")
+        return JSONResponse(
+            status_code=200,
+            content={"message": "Webhook received and queued"}
+        )
+    else:
+        logger.error("Failed to enqueue webhook")
+        raise HTTPException(status_code=500, detail="Failed to queue webhook")
+
+@router.get("/status")
+async def webhook_status():
+    """
+    Get webhook processing status.
+    Useful for monitoring.
+    """
+    queue_size = redis_client.get_queue_size(WEBHOOK_QUEUE)
+    
+    return {
+        "queue_size": queue_size,
+        "status": "healthy" if queue_size < 1000 else "backlog"
+    }
+```
+
+**Key Requirements:**
+- MUST verify GitHub webhook signature for security
+- Must enqueue events to Redis (don't process synchronously)
+- Must return 200 OK immediately to GitHub
+- Must handle only 'push' events (ignore others)
+- Must extract relevant data from webhook payload
+
+**Additional Notes for Antigravity:**
+- The webhook secret must be configured in GitHub repository settings
+- GitHub requires HTTPS endpoint in production
+- Set webhook URL to: `https://yourdomain.com/api/webhooks/github`
+
+---
+
+### File 9: `src/agents/client.py`
+
+**Purpose:** DigitalOcean Gradient™ API client
+
+```python
+"""
+DigitalOcean Gradient AI Platform client.
+Handles communication with the Documentation Consistency Enforcer agent.
+"""
+
+import httpx
+import json
+import logging
+from typing import Dict, Any, Optional
+from src.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+class GradientAgentClient:
+    """Client for DigitalOcean Gradient AI agent"""
+    
+    def __init__(self):
+        self.base_url = "https://api.digitalocean.com/v2/ai/agents"
+        self.agent_id = settings.AGENT_ID
+        self.api_token = settings.DIGITALOCEAN_API_TOKEN
+        
+        self.headers = {
+            "Authorization": f"Bearer {self.api_token}",
+            "Content-Type": "application/json"
+        }
+    
+    async def invoke(
+        self,
+        prompt: str,
+        max_tokens: int = None,
+        temperature: float = None
+    ) -> Dict[str, Any]:
+        """
+        Invoke the agent with a prompt.
+        
+        Args:
+            prompt: The prompt to send to the agent
+            max_tokens: Maximum tokens in response (default from settings)
+            temperature: Sampling temperature (default from settings)
+        
+        Returns:
+            Agent response as dictionary
+        
+        Raises:
+            httpx.HTTPError: If API call fails
+        """
+        
+        url = f"{self.base_url}/{self.agent_id}/chat"
+        
+        payload = {
+            "model": settings.AGENT_MODEL,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "max_tokens": max_tokens or settings.AGENT_MAX_TOKENS,
+            "temperature": temperature or settings.AGENT_TEMPERATURE
+        }
+        
+        logger.info(f"Invoking agent with prompt length: {len(prompt)} chars")
+        logger.debug(f"Prompt preview: {prompt[:200]}...")
+        
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                response = await client.post(
+                    url,
+                    headers=self.headers,
+                    json=payload
+                )
+                
+                response.raise_for_status()
+                result = response.json()
+                
+                logger.info("Agent invocation successful")
+                return result
+                
+        except httpx.HTTPError as e:
+            logger.error(f"Agent invocation failed: {e}")
+            logger.error(f"Response: {e.response.text if hasattr(e, 'response') else 'N/A'}")
+            raise
+    
+    async def invoke_streaming(
+        self,
+        prompt: str,
+        max_tokens: int = None,
+        temperature: float = None
+    ):
+        """
+        Invoke agent with streaming response.
+        Yields chunks as they arrive.
+        
+        Useful for long-running generations.
+        """
+        
+        url = f"{self.base_url}/{self.agent_id}/chat"
+        
+        payload = {
+            "model": settings.AGENT_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": max_tokens or settings.AGENT_MAX_TOKENS,
+            "temperature": temperature or settings.AGENT_TEMPERATURE,
+            "stream": True
+        }
+        
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream("POST", url, headers=self.headers, json=payload) as response:
+                response.raise_for_status()
+                
+                async for line in response.aiter_lines():
+                    if line.strip():
+                        try:
+                            chunk = json.loads(line)
+                            if chunk.get("type") == "content_block_delta":
+                                yield chunk["delta"]["text"]
+                        except json.JSONDecodeError:
+                            continue
+
+# Global client instance
+gradient_client = GradientAgentClient()
+```
+
+**Key Requirements:**
+- Must use async httpx for non-blocking calls
+- Must support both regular and streaming invocations
+- Must have proper timeout (120 seconds for long generations)
+- Must log requests and errors for debugging
+- Must use settings for configuration
+
+---
+
+### File 10: `src/agents/invoker.py`
+
+**Purpose:** Role-based agent invoker (orchestrates different agent behaviors)
+
+```python
+"""
+Role-based agent invoker.
+Provides specialized methods for each agent role (watcher, analyzer, generator, etc.).
+"""
+
+import json
+import logging
+from typing import Dict, Any, List
+from src.agents.client import gradient_client
+from src.agents.parser import AgentResponseParser
+
+logger = logging.getLogger(__name__)
+
+class AgentRoleInvoker:
+    """
+    Invokes the agent with role-specific prompts.
+    Each method corresponds to one agent role in our architecture.
+    """
+    
+    def __init__(self):
+        self.client = gradient_client
+        self.parser = AgentResponseParser()
+    
+    async def invoke_as_watcher(self, webhook_payload: Dict) -> Dict[str, Any]:
+        """
+        Invoke agent as WATCHER - detects if code changes need doc updates.
+        
+        Args:
+            webhook_payload: GitHub webhook data
+        
+        Returns:
+            {
+                "requires_documentation_update": bool,
+                "change_events": [
+                    {
+                        "file_path": str,
+                        "change_type": str,
+                        "entity_name": str,
+                        "visibility": str,
+                        "breaking": bool,
+                        "confidence": float,
+                        "reasoning": str
+                    }
+                ]
+            }
+        """
+        
+        prompt = f"""
+ROLE: You are acting as a WATCHER AGENT in the Documentation Consistency Enforcer system.
+
+TASK: Analyze this GitHub webhook payload and determine if any code changes require documentation updates.
+
+WEBHOOK DATA:
+{json.dumps(webhook_payload, indent=2)}
+
+ANALYSIS RULES:
+- TRIGGER documentation update for: public API changes, function signature changes, new endpoints, config schema changes
+- IGNORE: private implementation details, code formatting, internal refactors with no API impact
+- For each triggering change, identify the specific entity (function/class/endpoint name)
+
+OUTPUT FORMAT: Respond ONLY with valid JSON (no markdown, no explanation):
+{{
+    "requires_documentation_update": true/false,
+    "change_events": [
+        {{
+            "file_path": "path/to/file",
+            "change_type": "function_signature_change|new_api|breaking_change|config_change",
+            "entity_name": "functionOrClassName",
+            "visibility": "public|internal|private",
+            "breaking": true/false,
+            "confidence": 0.95,
+            "reasoning": "brief explanation"
+        }}
+    ],
+    "reasoning": "overall analysis summary"
+}}
+
+If no documentation updates are needed, return:
+{{
+    "requires_documentation_update": false,
+    "change_events": [],
+    "reasoning": "why no updates needed"
+}}
+"""
+        
+        response = await self.client.invoke(prompt)
+        parsed = self.parser.parse_watcher_response(response)
+        
+        logger.info(
+            f"Watcher analysis: {len(parsed.get('change_events', []))} changes detected"
+        )
+        
+        return parsed
+    
+    async def invoke_as_impact_analyzer(
+        self,
+        change_event: Dict,
+        knowledge_graph: Dict
+    ) -> Dict[str, Any]:
+        """
+        Invoke agent as IMPACT ANALYZER - finds affected documentation.
+        
+        Args:
+            change_event: Change detected by Watcher
+            knowledge_graph: Code-to-doc mappings
+        
+        Returns:
+            {
+                "affected_documents": [
+                    {
+                        "file_path": str,
+                        "sections_affected": List[str],
+                        "impact_severity": str,
+                        "update_type": str
+                    }
+                ]
+            }
+        """
+        
+        prompt = f"""
+ROLE: You are acting as an IMPACT ANALYSIS AGENT in the Documentation Consistency Enforcer system.
+
+TASK: Given this code change, identify ALL documentation files that need updates.
+
+CODE CHANGE:
+{json.dumps(change_event, indent=2)}
+
+KNOWLEDGE GRAPH (known code-to-doc mappings):
+{json.dumps(knowledge_graph, indent=2)}
+
+ANALYSIS APPROACH:
+1. Check knowledge graph for explicit mappings
+2. Infer implicit relationships (e.g., if auth.ts changed, docs/authentication.md likely affected)
+3. Consider cross-cutting concerns (README.md, API specs, tutorials)
+
+OUTPUT FORMAT: Respond ONLY with valid JSON:
+{{
+    "affected_documents": [
+        {{
+            "file_path": "docs/api/authentication.md",
+            "sections_affected": ["Login Flow", "Error Handling"],
+            "impact_severity": "high|medium|low",
+            "update_type": "modification|addition|deletion",
+            "reasoning": "why this doc is affected"
+        }}
+    ],
+    "confidence": 0.88,
+    "reasoning": "overall impact analysis"
+}}
+"""
+        
+        response = await self.client.invoke(prompt)
+        parsed = self.parser.parse_impact_analyzer_response(response)
+        
+        logger.info(
+            f"Impact analysis: {len(parsed.get('affected_documents', []))} documents affected"
+        )
+        
+        return parsed
+    
+    async def invoke_as_content_generator(
+        self,
+        change_event: Dict,
+        existing_doc_content: str,
+        doc_file_path: str
+    ) -> Dict[str, Any]:
+        """
+        Invoke agent as CONTENT GENERATOR - creates documentation updates.
+        
+        Args:
+            change_event: The code change
+            existing_doc_content: Current documentation content
+            doc_file_path: Path to documentation file
+        
+        Returns:
+            {
+                "diff": str,  # Unified diff format
+                "confidence_score": float,
+                "requires_human_review": bool,
+                "migration_notes": str (optional)
+            }
+        """
+        
+        # Determine documentation format from file extension
+        file_ext = doc_file_path.split('.')[-1]
+        doc_format = {
+            'md': 'Markdown',
+            'yaml': 'OpenAPI YAML',
+            'json': 'JSON Schema',
+            'rst': 'ReStructuredText'
+        }.get(file_ext, 'Markdown')
+        
+        prompt = f"""
+ROLE: You are acting as a CONTENT GENERATOR AGENT specialized in {doc_format} documentation.
+
+TASK: Generate a documentation update (diff format) for this code change.
+
+CODE CHANGE:
+{json.dumps(change_event, indent=2)}
+
+EXISTING DOCUMENTATION ({doc_file_path}):
+```{file_ext}
+{existing_doc_content}
+```
+
+REQUIREMENTS:
+- Generate a unified diff (show what lines to change, not complete rewrite)
+- Preserve the existing tone, style, and formatting
+- If function signature changed, update parameters and examples
+- If breaking change, add migration notes
+- Be accurate - only document what actually changed in the code
+
+OUTPUT FORMAT: Respond ONLY with valid JSON:
+{{
+    "diff": "unified diff string showing old and new lines",
+    "confidence_score": 0.92,
+    "requires_human_review": false,
+    "migration_notes": "optional: migration guide if breaking change",
+    "reasoning": "explanation of changes made"
+}}
+
+Example diff format:
+--- docs/api.md
++++ docs/api.md
+@@ -10,7 +10,8 @@
+ **Parameters:**
+-- `email` (string): User's email
+-- `password` (string): User's password
++- `email` (string): User's email address
++- `password` (string): User's password
++- `mfaToken` (string, optional): Multi-factor authentication token
+"""
+        
+        response = await self.client.invoke(prompt)
+        parsed = self.parser.parse_content_generator_response(response)
+        
+        logger.info(
+            f"Content generation: confidence={parsed.get('confidence_score', 0):.2f}"
+        )
+        
+        return parsed
+    
+    async def invoke_as_pr_creator(
+        self,
+        documentation_updates: List[Dict],
+        code_change_context: Dict
+    ) -> str:
+        """
+        Invoke agent as PR ORCHESTRATOR - creates PR description.
+        
+        Args:
+            documentation_updates: List of generated doc updates
+            code_change_context: Original code change context
+        
+        Returns:
+            Markdown-formatted PR description
+        """
+        
+        prompt = f"""
+ROLE: You are acting as a REVIEW ORCHESTRATOR AGENT in the Documentation Consistency Enforcer system.
+
+TASK: Create a clear, professional pull request description for these documentation updates.
+
+DOCUMENTATION UPDATES:
+{json.dumps(documentation_updates, indent=2)}
+
+CODE CHANGE CONTEXT:
+{json.dumps(code_change_context, indent=2)}
+
+OUTPUT FORMAT: Respond with Markdown-formatted PR description:
+
+## 📝 Documentation Updates for [Component Name]
+
+### Code Changes
+Brief summary of what changed in the code that triggered this update.
+
+### Documentation Files Updated
+- `file1.md`: What was updated
+- `file2.yaml`: What was updated
+
+### ⚠️ Breaking Changes
+(Only if applicable - list any breaking changes and migration path)
+
+### Review Checklist
+- [ ] Technical accuracy verified
+- [ ] Code examples tested
+- [ ] Links and references updated
+- [ ] Formatting is consistent
+
+**Confidence Score:** X.XX/1.00
+
+---
+*This PR was automatically generated by Documentation Consistency Enforcer*
+
+Make it professional, clear, and helpful for reviewers.
+"""
+        
+        response = await self.client.invoke(prompt)
+        
+        # Extract markdown content from response
+        content = response["choices"][0]["message"]["content"]
+        
+        # Remove any code fences if agent wrapped in markdown
+        if content.strip().startswith("```"):
+            content = content.strip().split("```")[1]
+            if content.startswith("markdown\n"):
+                content = content[9:]  # Remove "markdown\n"
+        
+        logger.info("PR description generated")
+        
+        return content.strip()
+
+# Global invoker instance
+agent_invoker = AgentRoleInvoker()
+```
+
+**Key Requirements:**
+- Each method must correspond to one agent role
+- All responses must be parsed and validated
+- Must include clear, detailed prompts for agent
+- Must handle both structured (JSON) and unstructured (Markdown) outputs
+- Must log all invocations for monitoring
+
+**Important for Antigravity:**
+- The prompts are the MOST IMPORTANT part - they guide the AI agent's behavior
+- Each prompt must clearly specify: role, task, input data, and expected output format
+- Prompts must request JSON output for structured data (easier to parse)
+- Always include examples in prompts when possible
+
+---
+
+### File 11: `src/agents/parser.py`
+
+**Purpose:** Parse and validate agent responses
+
+```python
+"""
+Agent response parser and validator.
+Handles extracting structured data from agent outputs.
+"""
+
+import json
+import re
+import logging
+from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
+
+class AgentResponseParser:
+    """Parse and validate responses from the agent"""
+    
+    @staticmethod
+    def parse_watcher_response(raw_response: Dict) -> Dict[str, Any]:
+        """
+        Parse Watcher agent response.
+        
+        Args:
+            raw_response: Raw response from DigitalOcean Gradient API
+        
+        Returns:
+            Parsed and validated dictionary
+        
+        Raises:
+            ValueError: If response is invalid
+        """
+        try:
+            # Extract content from API response
+            content = raw_response["choices"][0]["message"]["content"]
+            
+            # Try to parse as JSON
+            parsed = AgentResponseParser._extract_json(content)
+            
+            # Validate required fields
+            required_fields = ["requires_documentation_update", "change_events"]
+            for field in required_fields:
+                if field not in parsed:
+                    raise ValueError(f"Missing required field: {field}")
+            
+            # Validate types
+            if not isinstance(parsed["requires_documentation_update"], bool):
+                raise ValueError("requires_documentation_update must be boolean")
+            
+            if not isinstance(parsed["change_events"], list):
+                raise ValueError("change_events must be a list")
+            
+            # Validate each change event
+            for event in parsed["change_events"]:
+                if "confidence" in event:
+                    # Ensure confidence is float between 0 and 1
+                    event["confidence"] = float(event["confidence"])
+                    if not 0 <= event["confidence"] <= 1:
+                        event["confidence"] = 0.5  # Default if invalid
+            
+            return parsed
+            
+        except Exception as e:
+            logger.error(f"Failed to parse watcher response: {e}")
+            logger.error(f"Raw content: {content[:500]}")
+            
+            # Return safe default
+            return {
+                "requires_documentation_update": False,
+                "change_events": [],
+                "reasoning": "Failed to parse agent response",
+                "error": str(e)
+            }
+    
+    @staticmethod
+    def parse_impact_analyzer_response(raw_response: Dict) -> Dict[str, Any]:
+        """Parse Impact Analyzer agent response"""
+        try:
+            content = raw_response["choices"][0]["message"]["content"]
+            parsed = AgentResponseParser._extract_json(content)
+            
+            # Validate
+            if "affected_documents" not in parsed:
+                raise ValueError("Missing affected_documents field")
+            
+            if not isinstance(parsed["affected_documents"], list):
+                raise ValueError("affected_documents must be a list")
+            
+            return parsed
+            
+        except Exception as e:
+            logger.error(f"Failed to parse impact analyzer response: {e}")
+            return {
+                "affected_documents": [],
+                "confidence": 0.0,
+                "reasoning": "Failed to parse response",
+                "error": str(e)
+            }
+    
+    @staticmethod
+    def parse_content_generator_response(raw_response: Dict) -> Dict[str, Any]:
+        """Parse Content Generator agent response"""
+        try:
+            content = raw_response["choices"][0]["message"]["content"]
+            parsed = AgentResponseParser._extract_json(content)
+            
+            # Validate required fields
+            required = ["diff", "confidence_score"]
+            for field in required:
+                if field not in parsed:
+                    raise ValueError(f"Missing field: {field}")
+            
+            # Validate confidence score
+            parsed["confidence_score"] = float(parsed["confidence_score"])
+            if not 0 <= parsed["confidence_score"] <= 1:
+                logger.warning(f"Invalid confidence score: {parsed['confidence_score']}")
+                parsed["confidence_score"] = 0.5
+            
+            return parsed
+            
+        except Exception as e:
+            logger.error(f"Failed to parse content generator response: {e}")
+            
+            # Fallback: treat entire response as documentation
+            content = raw_response["choices"][0]["message"]["content"]
+            return {
+                "diff": content,
+                "confidence_score": 0.5,
+                "requires_human_review": True,
+                "reasoning": "Failed to parse structured response",
+                "error": str(e)
+            }
+    
+    @staticmethod
+    def _extract_json(content: str) -> Dict:
+        """
+        Extract JSON from various formats (direct JSON, markdown code blocks, etc.)
+        
+        Args:
+            content: Agent response content
+        
+        Returns:
+            Parsed JSON as dictionary
+        
+        Raises:
+            ValueError: If no valid JSON found
+        """
+        content = content.strip()
+        
+        # Try direct JSON parse
+        if content.startswith("{"):
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError:
+                pass
+        
+        # Try extracting from markdown code block
+        patterns = [
+            r'```json\s*\n(.*?)\n```',  # ```json ... ```
+            r'```\s*\n(.*?)\n```',      # ``` ... ```
+            r'({.*})',                   # Any {...}
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, content, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group(1))
+                except json.JSONDecodeError:
+                    continue
+        
+        raise ValueError("Could not extract valid JSON from response")
+```
+
+**Key Requirements:**
+- Must handle various response formats (direct JSON, markdown code blocks)
+- Must validate all required fields
+- Must have fallback behavior for parse failures
+- Must normalize confidence scores to 0-1 range
+- Must log errors for debugging
+
+---
+
+### File 12: `src/workers/webhook_processor.py`
+
+**Purpose:** Background worker to process webhook events from queue
+
+```python
+"""
+Webhook processor worker.
+Consumes webhook events from Redis queue and triggers agent orchestration.
+"""
+
+import asyncio
+import logging
+from datetime import datetime
+from sqlalchemy.orm import Session
+
+from src.core.database import SessionLocal
+from src.core.redis_client import redis_client, WEBHOOK_QUEUE, IMPACT_ANALYSIS_QUEUE
+from src.agents.invoker import agent_invoker
+from src.models.repository import Repository
+from src.integrations.github.client import github_client
+
+logger = logging.getLogger(__name__)
+
+class WebhookProcessor:
+    """Processes webhook events from the queue"""
+    
+    def __init__(self):
+        self.running = True
+    
+    async def start(self):
+        """Start processing webhooks from queue"""
+        logger.info("Webhook processor started")
+        
+        while self.running:
+            try:
+                # Get webhook event from queue (blocking with timeout)
+                event = redis_client.dequeue(WEBHOOK_QUEUE, timeout=5)
+                
+                if event:
+                    await self.process_event(event)
+                else:
+                    # No event in queue, continue waiting
+                    await asyncio.sleep(1)
+                    
+            except Exception as e:
+                logger.error(f"Error in webhook processor: {e}", exc_info=True)
+                await asyncio.sleep(5)  # Back off on error
+    
+    async def process_event(self, event: dict):
+        """
+        Process a single webhook event.
+        
+        Args:
+            event: Webhook event data from queue
+        """
+        logger.info(f"Processing webhook for {event['repository']['full_name']}")
+        
+        db = SessionLocal()
+        try:
+            # 1. Check if repository is monitored and enabled
+            repo = db.query(Repository).filter(
+                Repository.full_name == event['repository']['full_name']
+            ).first()
+            
+            if not repo:
+                logger.warning(f"Repository not found: {event['repository']['full_name']}")
+                return
+            
+            if not repo.enabled:
+                logger.info(f"Repository disabled: {repo.full_name}")
+                return
+            
+            # Update last webhook timestamp
+            repo.last_webhook_at = datetime.utcnow()
+            db.commit()
+            
+            # 2. Fetch code diff from GitHub
+            head_commit = event['head_commit']
+            diff = await github_client.get_commit_diff(
+                repo.owner,
+                repo.name,
+                head_commit['id']
+            )
+            
+            # Enhance event with diff
+            event['code_diff'] = diff
+            
+            # 3. Invoke Watcher Agent to analyze changes
+            watcher_result = await agent_invoker.invoke_as_watcher(event)
+            
+            # 4. If documentation update needed, enqueue for impact analysis
+            if watcher_result['requires_documentation_update']:
+                change_events = watcher_result['change_events']
+                
+                logger.info(
+                    f"Documentation update required: {len(change_events)} changes detected"
+                )
+                
+                for change_event in change_events:
+                    # Enqueue each change for impact analysis
+                    impact_data = {
+                        "repository_id": str(repo.id),
+                        "change_event": change_event,
+                        "trigger_commit": head_commit
+                    }
+                    
+                    redis_client.enqueue(IMPACT_ANALYSIS_QUEUE, impact_data)
+            else:
+                logger.info("No documentation updates required")
+        
+        except Exception as e:
+            logger.error(f"Error processing webhook event: {e}", exc_info=True)
+        
+        finally:
+            db.close()
+    
+    def stop(self):
+        """Stop the processor"""
+        self.running = False
+        logger.info("Webhook processor stopping...")
+
+# Run the worker
+if __name__ == "__main__":
+    processor = WebhookProcessor()
+    asyncio.run(processor.start())
+```
+
+**Key Requirements:**
+- Must run as a separate process/container
+- Must consume from Redis queue
+- Must be fault-tolerant (retry on errors)
+- Must check if repository is enabled before processing
+- Must enqueue results for next stage (impact analysis)
+- Must log all activities
+
+**Running the Worker:**
+```bash
+# In production, run as a separate service
+python -m src.workers.webhook_processor
+```
+
+---
+
+### File 13: `src/workers/orchestrator.py`
+
+**Purpose:** Orchestrates the complete agent workflow (impact → generation → PR creation)
+
+```python
+"""
+Agent orchestrator worker.
+Coordinates the multi-step process of documentation generation.
+"""
+
+import asyncio
+import logging
+from datetime import datetime
+from sqlalchemy.orm import Session
+from typing import List, Dict
+
+from src.core.database import SessionLocal
+from src.core.redis_client import redis_client, IMPACT_ANALYSIS_QUEUE, PR_CREATION_QUEUE
+from src.agents.invoker import agent_invoker
+from src.models.repository import Repository
+from src.models.documentation_update import DocumentationUpdate, UpdateStatus
+from src.integrations.github.client import github_client
+from src.services.knowledge_graph import knowledge_graph_service
+
+logger = logging.getLogger(__name__)
+
+class AgentOrchestrator:
+    """Orchestrates the complete documentation update workflow"""
+    
+    def __init__(self):
+        self.running = True
+    
+    async def start(self):
+        """Start processing impact analysis queue"""
+        logger.info("Agent orchestrator started")
+        
+        while self.running:
+            try:
+                # Get impact analysis task from queue
+                task = redis_client.dequeue(IMPACT_ANALYSIS_QUEUE, timeout=5)
+                
+                if task:
+                    await self.process_task(task)
+                else:
+                    await asyncio.sleep(1)
+                    
+            except Exception as e:
+                logger.error(f"Error in orchestrator: {e}", exc_info=True)
+                await asyncio.sleep(5)
+    
+    async def process_task(self, task: dict):
+        """
+        Process a single task: impact analysis → content generation → PR creation.
+        
+        Args:
+            task: {
+                "repository_id": str,
+                "change_event": dict,
+                "trigger_commit": dict
+            }
+        """
+        logger.info(f"Processing documentation update task")
+        
+        db = SessionLocal()
+        try:
+            # 1. Get repository
+            repo = db.query(Repository).filter(
+                Repository.id == task['repository_id']
+            ).first()
+            
+            if not repo:
+                logger.error(f"Repository not found: {task['repository_id']}")
+                return
+            
+            # 2. Get knowledge graph for this repository
+            knowledge_graph = knowledge_graph_service.get_mappings(repo.id)
+            
+            # 3. Invoke Impact Analyzer Agent
+            impact_result = await agent_invoker.invoke_as_impact_analyzer(
+                task['change_event'],
+                knowledge_graph
+            )
+            
+            affected_docs = impact_result['affected_documents']
+            
+            if not affected_docs:
+                logger.info("No affected documents identified")
+                return
+            
+            logger.info(f"Impact analysis: {len(affected_docs)} documents affected")
+            
+            # 4. Generate documentation updates for each affected file
+            doc_updates = []
+            
+            for doc in affected_docs:
+                # Fetch existing documentation content from GitHub
+                existing_content = await github_client.get_file_content(
+                    repo.owner,
+                    repo.name,
+                    doc['file_path'],
+                    repo.default_branch
+                )
+                
+                if not existing_content:
+                    logger.warning(f"Could not fetch {doc['file_path']}, skipping")
+                    continue
+                
+                # Invoke Content Generator Agent
+                update = await agent_invoker.invoke_as_content_generator(
+                    task['change_event'],
+                    existing_content,
+                    doc['file_path']
+                )
+                
+                # Add metadata
+                update['file_path'] = doc['file_path']
+                update['sections_affected'] = doc.get('sections_affected', [])
+                
+                doc_updates.append(update)
+            
+            if not doc_updates:
+                logger.warning("No documentation updates generated")
+                return
+            
+            # 5. Check confidence threshold
+            avg_confidence = sum(u['confidence_score'] for u in doc_updates) / len(doc_updates)
+            
+            from src.core.config import settings
+            
+            if avg_confidence < settings.MIN_CONFIDENCE_THRESHOLD:
+                logger.info(
+                    f"Average confidence {avg_confidence:.2f} below threshold "
+                    f"{settings.MIN_CONFIDENCE_THRESHOLD}, skipping PR creation"
+                )
+                return
+            
+            # 6. Create database record
+            doc_update_record = DocumentationUpdate(
+                repository_id=repo.id,
+                trigger_commit_sha=task['trigger_commit']['id'],
+                trigger_commit_message=task['trigger_commit'].get('message', ''),
+                trigger_author=task['trigger_commit'].get('author', {}).get('name', ''),
+                affected_files=[u['file_path'] for u in doc_updates],
+                confidence_score=int(avg_confidence * 100),
+                status=UpdateStatus.PENDING
+            )
+            
+            db.add(doc_update_record)
+            db.commit()
+            db.refresh(doc_update_record)
+            
+            # 7. Generate PR description
+            pr_description = await agent_invoker.invoke_as_pr_creator(
+                doc_updates,
+                task['change_event']
+            )
+            
+            # 8. Enqueue for PR creation
+            pr_data = {
+                "update_id": str(doc_update_record.id),
+                "repository_id": str(repo.id),
+                "doc_updates": doc_updates,
+                "pr_description": pr_description,
+                "confidence_score": avg_confidence
+            }
+            
+            redis_client.enqueue(PR_CREATION_QUEUE, pr_data)
+            
+            logger.info(f"Documentation update queued for PR creation: {doc_update_record.id}")
+        
+        except Exception as e:
+            logger.error(f"Error processing orchestration task: {e}", exc_info=True)
+        
+        finally:
+            db.close()
+    
+    def stop(self):
+        self.running = False
+        logger.info("Agent orchestrator stopping...")
+
+if __name__ == "__main__":
+    orchestrator = AgentOrchestrator()
+    asyncio.run(orchestrator.start())
+```
+
+**Key Requirements:**
+- Must coordinate all agent invocations in sequence
+- Must fetch existing documentation from GitHub
+- Must check confidence thresholds before proceeding
+- Must create database records for tracking
+- Must enqueue for PR creation if successful
+- Must handle errors gracefully
+
+---
+
+Due to length constraints, I'll now provide the remaining critical files in a condensed format, then move to the frontend implementation.
+
+### Remaining Backend Files (Condensed)
+
+**File 14: `src/workers/pr_creator.py`**
+- Consumes from PR_CREATION_QUEUE
+- Creates Git branch
+- Commits documentation changes
+- Creates GitHub pull request
+- Updates database record with PR URL
+- Sends notifications
+
+**File 15: `src/integrations/github/client.py`**
+- Async GitHub API client using httpx
+- Methods: get_commit_diff(), get_file_content(), create_pull_request(), create_branch(), commit_file()
+- OAuth token management
+- Rate limit handling
+
+**File 16: `src/services/knowledge_graph.py`**
+- Builds and maintains code-to-doc mappings
+- Stores in PostgreSQL (code_doc_mappings table)
+- Methods: add_mapping(), get_mappings(), update_from_annotations(), learn_from_edits()
+
+**File 17: `src/api/auth.py`**
+- GitHub OAuth flow: /auth/github/login, /auth/github/callback
+- JWT token generation
+- Protected route dependency: get_current_user()
+
+**File 18: `src/api/repositories.py`**
+- CRUD endpoints for repositories
+- GET /repositories - list user's repos
+- POST /repositories - add new repo
+- PUT /repositories/{id}/config - update settings
+- DELETE /repositories/{id} - remove monitoring
+
+**File 19: `src/api/documentation.py`**
+- GET /documentation-updates - list PRs
+- GET /documentation-updates/{id} - get details
+- POST /documentation-updates/{id}/feedback - submit review
+
+---
+
+# 4. FRONTEND IMPLEMENTATION INSTRUCTIONS {#frontend-implementation}
+
+## Project Structure
+
+```
+frontend/
+├── public/
+│   ├── index.html
+│   └── favicon.ico
+│
+├── src/
+│   ├── components/
+│   │   ├── layout/
+│   │   │   ├── Navbar.tsx
+│   │   │   ├── Sidebar.tsx
+│   │   │   └── Layout.tsx
+│   │   │
+│   │   ├── repository/
+│   │   │   ├── RepositoryCard.tsx
+│   │   │   ├── RepositoryList.tsx
+│   │   │   └── RepositorySettings.tsx
+│   │   │
+│   │   ├── documentation/
+│   │   │   ├── UpdateCard.tsx
+│   │   │   ├── UpdateList.tsx
+│   │   │   ├── DiffViewer.tsx
+│   │   │   └── ConfidenceBadge.tsx
+│   │   │
+│   │   └── common/
+│   │       ├── Button.tsx
+│   │       ├── Input.tsx
+│   │       ├── Card.tsx
+│   │       └── Badge.tsx
+│   │
+│   ├── pages/
+│   │   ├── Dashboard.tsx
+│   │   ├── Repositories.tsx
+│   │   ├── DocumentationUpdates.tsx
+│   │   ├── Analytics.tsx
+│   │   └── Settings.tsx
+│   │
+│   ├── hooks/
+│   │   ├── useAuth.ts
+│   │   ├── useRepositories.ts
+│   │   ├── useDocumentationUpdates.ts
+│   │   └── useAnalytics.ts
+│   │
+│   ├── services/
+│   │   └── api.ts
+│   │
+│   ├── types/
+│   │   ├── repository.ts
+│   │   ├── documentation.ts
+│   │   └── user.ts
+│   │
+│   ├── App.tsx
+│   ├── index.tsx
+│   └── index.css
+│
+├── package.json
+├── tsconfig.json
+├── tailwind.config.js
+└── vite.config.ts
+```
+
+## Key Frontend Files
+
+### File 1: `src/services/api.ts`
+
+**Purpose:** API client for backend communication
+
+```typescript
+/**
+ * API client for backend communication.
+ * Uses Axios for HTTP requests with automatic token injection.
+ */
+
+import axios from 'axios';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+
+// Create axios instance
+const apiClient = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor - add auth token
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor - handle errors
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Unauthorized - clear token and redirect to login
+      localStorage.removeItem('auth_token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+// API methods
+export const api = {
+  // Auth
+  auth: {
+    getGitHubLoginUrl: () => 
+      apiClient.get('/auth/github/login'),
+    getCurrentUser: () => 
+      apiClient.get('/auth/me'),
+  },
+
+  // Repositories
+  repositories: {
+    list: () => 
+      apiClient.get('/repositories'),
+    get: (id: string) => 
+      apiClient.get(`/repositories/${id}`),
+    create: (data: any) => 
+      apiClient.post('/repositories', data),
+    update: (id: string, data: any) => 
+      apiClient.put(`/repositories/${id}`, data),
+    updateConfig: (id: string, config: any) => 
+      apiClient.put(`/repositories/${id}/config`, config),
+    delete: (id: string) => 
+      apiClient.delete(`/repositories/${id}`),
+  },
+
+  // Documentation Updates
+  documentationUpdates: {
+    list: (params?: any) => 
+      apiClient.get('/documentation-updates', { params }),
+    get: (id: string) => 
+      apiClient.get(`/documentation-updates/${id}`),
+    submitFeedback: (id: string, feedback: any) => 
+      apiClient.post(`/documentation-updates/${id}/feedback`, feedback),
+  },
+
+  // Metrics
+  metrics: {
+    getDashboard: () => 
+      apiClient.get('/metrics/dashboard'),
+    getRepositoryStats: (repoId: string) => 
+      apiClient.get(`/metrics/repository/${repoId}`),
+  },
+};
+
+export default apiClient;
+```
+
+**Key Requirements:**
+- Must add auth token to all requests
+- Must handle 401 errors (redirect to login)
+- Must export typed API methods
+- Must use environment variables for API URL
+
+---
+
+### File 2: `src/pages/Dashboard.tsx`
+
+**Purpose:** Main dashboard page showing overview
+
+```typescript
+/**
+ * Dashboard page - shows overview of repositories and recent activity.
+ */
+
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../services/api';
+import { RepositoryCard } from '../components/repository/RepositoryCard';
+import { UpdateCard } from '../components/documentation/UpdateCard';
+
+export const Dashboard: React.FC = () => {
+  // Fetch repositories
+  const { data: repositories, isLoading: reposLoading } = useQuery({
+    queryKey: ['repositories'],
+    queryFn: () => api.repositories.list(),
+  });
+
+  // Fetch recent updates
+  const { data: recentUpdates, isLoading: updatesLoading } = useQuery({
+    queryKey: ['recent-updates'],
+    queryFn: () => api.documentationUpdates.list({ limit: 10 }),
+  });
+
+  // Fetch metrics
+  const { data: metrics } = useQuery({
+    queryKey: ['dashboard-metrics'],
+    queryFn: () => api.metrics.getDashboard(),
+  });
+
+  if (reposLoading || updatesLoading) {
+    return <div className="flex items-center justify-center h-screen">
+      <div className="text-lg">Loading...</div>
+    </div>;
+  }
+
+  const repos = repositories?.data || [];
+  const updates = recentUpdates?.data || [];
+  const stats = metrics?.data || {};
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-gray-600 mt-1">
+          Monitor your documentation automation
+        </p>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <StatCard
+          title="Active Repositories"
+          value={stats.active_repositories || 0}
+          icon="📁"
+        />
+        <StatCard
+          title="PRs Created (30d)"
+          value={stats.prs_created_30d || 0}
+          icon="🔄"
+        />
+        <StatCard
+          title="Acceptance Rate"
+          value={`${stats.acceptance_rate || 0}%`}
+          icon="✅"
+        />
+        <StatCard
+          title="Avg Confidence"
+          value={`${stats.avg_confidence || 0}%`}
+          icon="🎯"
+        />
+      </div>
+
+      {/* Repositories Section */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-semibold">Your Repositories</h2>
+          
+            href="/repositories/add"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Add Repository
+          </a>
+        </div>
+
+        {repos.length === 0 ? (
+          <div className="text-center py-12 bg-gray-50 rounded-lg">
+            <p className="text-gray-600">No repositories connected yet.</p>
+            
+              href="/repositories/add"
+              className="text-blue-600 hover:underline mt-2 inline-block"
+            >
+              Connect your first repository →
+            </a>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {repos.slice(0, 6).map((repo: any) => (
+              <RepositoryCard key={repo.id} repository={repo} />
+            ))}
+          </div>
+        )}
+
+        {repos.length > 6 && (
+          <div className="text-center mt-4">
+            
+              href="/repositories"
+              className="text-blue-600 hover:underline"
+            >
+              View all repositories →
+            </a>
+          </div>
+        )}
+      </div>
+
+      {/* Recent Activity */}
+      <div>
+        <h2 className="text-2xl font-semibold mb-4">Recent Updates</h2>
+
+        {updates.length === 0 ? (
+          <div className="text-center py-12 bg-gray-50 rounded-lg">
+            <p className="text-gray-600">No recent updates.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {updates.map((update: any) => (
+              <UpdateCard key={update.id} update={update} compact />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Stat Card Component
+const StatCard: React.FC<{
+  title: string;
+  value: string | number;
+  icon: string;
+}> = ({ title, value, icon }) => {
+  return (
+    <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-gray-600 text-sm">{title}</p>
+          <p className="text-3xl font-bold mt-2">{value}</p>
+        </div>
+        <div className="text-4xl">{icon}</div>
+      </div>
+    </div>
+  );
+};
+```
+
+**Key Requirements:**
+- Must use React Query for data fetching
+- Must show loading states
+- Must display key metrics
+- Must have responsive grid layout
+- Must use Tailwind CSS for styling
+
+---
+
+### File 3: `src/components/repository/RepositoryCard.tsx`
+
+```typescript
+/**
+ * Repository card component - displays repository status and quick actions.
+ */
+
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { ConfidenceBadge } from '../documentation/ConfidenceBadge';
+
+interface RepositoryCardProps {
+  repository: {
+    id: string;
+    full_name: string;
+    enabled: boolean;
+    total_prs_created: number;
+    total_prs_merged: number;
+    average_confidence_score: number;
+    last_webhook_at?: string;
+  };
+}
+
+export const RepositoryCard: React.FC<RepositoryCardProps> = ({ repository }) => {
+  const acceptanceRate = repository.total_prs_created > 0
+    ? Math.round((repository.total_prs_merged / repository.total_prs_created) * 100)
+    : 0;
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-5 hover:shadow-lg transition-shadow">
+      {/* Header */}
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex-1">
+          <Link
+            to={`/repositories/${repository.id}`}
+            className="text-lg font-semibold text-gray-900 hover:text-blue-600"
+          >
+            {repository.full_name}
+          </Link>
+          
+          {/* Status Badge */}
+          <div className="mt-2">
+            {repository.enabled ? (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                ● Active
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                ● Disabled
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-4 mb-4">
+        <div>
+          <p className="text-sm text-gray-600">PRs Created</p>
+          <p className="text-2xl font-bold">{repository.total_prs_created}</p>
+        </div>
+        <div>
+          <p className="text-sm text-gray-600">Acceptance</p>
+          <p className="text-2xl font-bold">{acceptanceRate}%</p>
+        </div>
+      </div>
+
+      {/* Average Confidence */}
+      <div className="mb-4">
+        <p className="text-sm text-gray-600 mb-1">Avg Confidence</p>
+        <ConfidenceBadge score={repository.average_confidence_score} />
+      </div>
+
+      {/* Last Activity */}
+      {repository.last_webhook_at && (
+        <p className="text-xs text-gray-500">
+          Last activity: {new Date(repository.last_webhook_at).toLocaleDateString()}
+        </p>
+      )}
+
+      {/* Actions */}
+      <div className="mt-4 pt-4 border-t border-gray-200 flex gap-2">
+        <Link
+          to={`/repositories/${repository.id}/settings`}
+          className="text-sm text-blue-600 hover:underline"
+        >
+          Settings
+        </Link>
+        <Link
+          to={`/repositories/${repository.id}/updates`}
+          className="text-sm text-blue-600 hover:underline"
+        >
+          View PRs
+        </Link>
+      </div>
+    </div>
+  );
+};
+```
+
+---
+
+### File 4: `src/components/documentation/ConfidenceBadge.tsx`
+
+```typescript
+/**
+ * Confidence score badge component.
+ * Shows color-coded confidence score with visual indicator.
+ */
+
+import React from 'react';
+
+interface ConfidenceBadgeProps {
+  score: number; // 0-100
+  size?: 'sm' | 'md' | 'lg';
+}
+
+export const ConfidenceBadge: React.FC<ConfidenceBadgeProps> = ({
+  score,
+  size = 'md',
+}) => {
+  // Determine color based on score
+  const getColorClasses = (score: number) => {
+    if (score >= 90) {
+      return 'bg-green-100 text-green-800 border-green-200';
+    } else if (score >= 70) {
+      return 'bg-blue-100 text-blue-800 border-blue-200';
+    } else if (score >= 50) {
+      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    } else {
+      return 'bg-red-100 text-red-800 border-red-200';
+    }
+  };
+
+  const sizeClasses = {
+    sm: 'text-xs px-2 py-0.5',
+    md: 'text-sm px-3 py-1',
+    lg: 'text-base px-4 py-2',
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      {/* Progress bar */}
+      <div className="flex-1 bg-gray-200 rounded-full h-2">
+        <div
+          className={`h-2 rounded-full transition-all ${
+            score >= 90
+              ? 'bg-green-500'
+              : score >= 70
+              ? 'bg-blue-500'
+              : score >= 50
+              ? 'bg-yellow-500'
+              : 'bg-red-500'
+          }`}
+          style={{ width: `${score}%` }}
+        />
+      </div>
+
+      {/* Score badge */}
+      <span
+        className={`inline-flex items-center rounded-full border font-medium ${getColorClasses(
+          score
+        )} ${sizeClasses[size]}`}
+      >
+        {score}%
+      </span>
+    </div>
+  );
+};
+```
+
+---
+
+# 5. DATABASE SETUP {#database-setup}
+
+## Database Schema SQL
+
+```sql
+-- Users table
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    github_id VARCHAR(255) UNIQUE NOT NULL,
+    github_username VARCHAR(255) NOT NULL,
+    github_email VARCHAR(255),
+    github_access_token TEXT NOT NULL,
+    full_name VARCHAR(255),
+    avatar_url TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    is_admin BOOLEAN DEFAULT FALSE,
+    plan VARCHAR(50) DEFAULT 'free',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login_at TIMESTAMP
+);
+
+CREATE INDEX idx_users_github_id ON users(github_id);
+
+-- Repositories table
+CREATE TABLE repositories (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    github_repo_id INTEGER UNIQUE NOT NULL,
+    full_name VARCHAR(255) NOT NULL,
+    owner VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    default_branch VARCHAR(100) DEFAULT 'main',
+    enabled BOOLEAN DEFAULT TRUE,
+    config JSONB DEFAULT '{}'::jsonb,
+    total_prs_created INTEGER DEFAULT 0,
+    total_prs_merged INTEGER DEFAULT 0,
+    total_prs_rejected INTEGER DEFAULT 0,
+    average_confidence_score INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_webhook_at TIMESTAMP
+);
+
+CREATE INDEX idx_repositories_user_id ON repositories(user_id);
+CREATE INDEX idx_repositories_github_repo_id ON repositories(github_repo_id);
+CREATE INDEX idx_repositories_full_name ON repositories(full_name);
+
+-- Documentation updates table
+CREATE TABLE documentation_updates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    repository_id UUID NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+    trigger_commit_sha VARCHAR(255) NOT NULL,
+    trigger_commit_message TEXT,
+    trigger_author VARCHAR(255),
+    pr_number INTEGER,
+    pr_url TEXT,
+    pr_branch VARCHAR(255),
+    affected_files JSONB DEFAULT '[]'::jsonb,
+    changes_summary TEXT,
+    confidence_score INTEGER,
+    agent_role VARCHAR(50),
+    status VARCHAR(20) DEFAULT 'pending',
+    reviewed_by VARCHAR(255),
+    reviewed_at TIMESTAMP,
+    rejection_reason VARCHAR(255),
+    had_edits BOOLEAN DEFAULT FALSE,
+    edit_summary TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    merged_at TIMESTAMP
+);
+
+CREATE INDEX idx_documentation_updates_repository_id ON documentation_updates(repository_id);
+CREATE INDEX idx_documentation_updates_status ON documentation_updates(status);
+CREATE INDEX idx_documentation_updates_created_at ON documentation_updates(created_at);
+
+-- Agent invocations table (for monitoring and learning)
+CREATE TABLE agent_invocations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agent_id VARCHAR(255) NOT NULL,
+    role VARCHAR(50) NOT NULL,
+    prompt_hash VARCHAR(64),
+    response_json JSONB,
+    latency_ms INTEGER,
+    confidence_score DECIMAL(3,2),
+    status VARCHAR(20),
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_agent_invocations_created_at ON agent_invocations(created_at);
+CREATE INDEX idx_agent_invocations_role ON agent_invocations(role);
+
+-- Agent feedback table (for learning)
+CREATE TABLE agent_feedback (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    invocation_id UUID REFERENCES agent_invocations(id),
+    pr_id VARCHAR(255),
+    feedback_type VARCHAR(20),
+    human_edits TEXT,
+    rejection_reason VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Knowledge graph mappings table
+CREATE TABLE code_doc_mappings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    repository_id UUID REFERENCES repositories(id) ON DELETE CASCADE,
+    code_file_path VARCHAR(500),
+    code_entity_name VARCHAR(255),
+    code_entity_type VARCHAR(50),
+    doc_file_path VARCHAR(500),
+    doc_section VARCHAR(255),
+    relationship_type VARCHAR(50),
+    confidence_score DECIMAL(3,2),
+    last_verified_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(repository_id, code_file_path, code_entity_name, doc_file_path)
+);
+
+CREATE INDEX idx_mappings_code_file ON code_doc_mappings(repository_id, code_file_path);
+CREATE INDEX idx_mappings_doc_file ON code_doc_mappings(repository_id, doc_file_path);
+```
+
+---
+
+# 6. ENVIRONMENT CONFIGURATION {#environment-configuration}
+
+## Backend `.env` file
+
+Create `backend/.env` with these variables:
+
+```bash
+# Application
+APP_NAME="Documentation Consistency Enforcer"
+DEBUG=False
+SECRET_KEY=your-secret-key-here-change-this-in-production
+
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/doc_enforcer
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
+
+# GitHub OAuth
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+GITHUB_REDIRECT_URI=http://localhost:3000/auth/callback
+GITHUB_WEBHOOK_SECRET=your-webhook-secret
+
+# DigitalOcean Gradient AI
+DIGITALOCEAN_API_TOKEN=your-digitalocean-api-token
+AGENT_ID=your-agent-id-from-gradient-platform
+
+# Agent Configuration
+AGENT_MODEL=claude-3-5-sonnet-20241022
+AGENT_MAX_TOKENS=4096
+AGENT_TEMPERATURE=0.3
+
+# Thresholds
+MIN_CONFIDENCE_THRESHOLD=0.7
+AUTO_MERGE_THRESHOLD=0.95
+
+# CORS
+CORS_ORIGINS=["http://localhost:3000"]
+
+# Optional Notifications
+SLACK_WEBHOOK_URL=
+SENDGRID_API_KEY=
+```
+
+## Frontend `.env` file
+
+Create `frontend/.env`:
+
+```bash
+VITE_API_URL=http://localhost:8000/api
+VITE_GITHUB_CLIENT_ID=your-github-client-id
+```
+
+---
+
+# 7. DEPLOYMENT INSTRUCTIONS {#deployment-instructions}
+
+## Step 1: Set Up GitHub OAuth App
+
+1. Go to https://github.com/settings/developers
+2. Click "New OAuth App"
+3. Fill in:
+   - Application name: "Documentation Consistency Enforcer"
+   - Homepage URL: `https://yourdomain.com`
+   - Authorization callback URL: `https://yourdomain.com/auth/callback`
+4. Note the Client ID and Client Secret
+
+## Step 2: Set Up DigitalOcean Resources
+
+### 2.1 Create Managed PostgreSQL Database
+```bash
+# In DigitalOcean dashboard:
+Databases → Create → PostgreSQL 15 → Basic plan → Create
+# Note the connection string
+```
+
+### 2.2 Create Managed Redis
+```bash
+# In DigitalOcean dashboard:
+Databases → Create → Redis 7 → Basic plan → Create
+# Note the connection string
+```
+
+### 2.3 Deploy Backend on App Platform
+```yaml
+# .do/app.yaml
+name: doc-enforcer-backend
+services:
+  - name: api
+    github:
+      repo: your-username/doc-enforcer
+      branch: main
+      deploy_on_push: true
+    source_dir: /backend
+    build_command: pip install -r requirements.txt
+    run_command: uvicorn src.main:app --host 0.0.0.0 --port 8080
+    envs:
+      - key: DATABASE_URL
+        value: ${db.DATABASE_URL}
+      - key: REDIS_URL
+        value: ${redis.REDIS_URL}
+      - key: SECRET_KEY
+        value: ${SECRET_KEY}
+      - key: GITHUB_CLIENT_ID
+        value: ${GITHUB_CLIENT_ID}
+      - key: GITHUB_CLIENT_SECRET
+        value: ${GITHUB_CLIENT_SECRET}
+      - key: DIGITALOCEAN_API_TOKEN
+        value: ${DIGITALOCEAN_API_TOKEN}
+      - key: AGENT_ID
+        value: ${AGENT_ID}
+    
+  - name: webhook-worker
+    github:
+      repo: your-username/doc-enforcer
+      branch: main
+    source_dir: /backend
+    run_command: python -m src.workers.webhook_processor
+    envs: # Same as API
+    
+  - name: orchestrator-worker
+    github:
+      repo: your-username/doc-enforcer
+      branch: main
+    source_dir: /backend
+    run_command: python -m src.workers.orchestrator
+    envs: # Same as API
+
+  - name: pr-worker
+    github:
+      repo: your-username/doc-enforcer
+      branch: main
+    source_dir: /backend
+    run_command: python -m src.workers.pr_creator
+    envs: # Same as API
+
+static_sites:
+  - name: frontend
+    github:
+      repo: your-username/doc-enforcer
+      branch: main
+    source_dir: /frontend
+    build_command: npm run build
+    output_dir: /dist
+    envs:
+      - key: VITE_API_URL
+        value: https://api.yourdomain.com
+```
+
+### 2.4 Configure GitHub Webhook
+
+1. Go to your repository → Settings → Webhooks
+2. Add webhook:
+   - Payload URL: `https://api.yourdomain.com/api/webhooks/github`
+   - Content type: `application/json`
+   - Secret: (use your GITHUB_WEBHOOK_SECRET)
+   - Events: Select "Push events"
+   - Active: ✓
+
+---
+
+# 8. COMPLETE SETUP GUIDE FOR ANTIGRAVITY {#setup-guide}
+
+## Prerequisites
+
+1. GitHub account
+2. DigitalOcean account with Gradient™ AI Platform access
+3. Agent created on DigitalOcean Gradient™ (with the instructions you already provided)
+
+## Step-by-Step Instructions
+
+### Step 1: Gather Required Information
+
+Before starting, collect these:
+
+✅ GitHub OAuth Client ID and Secret (from Step "Set Up GitHub OAuth App" above)
+✅ DigitalOcean API Token (from DigitalOcean dashboard → API → Tokens)
+✅ Agent ID (from DigitalOcean Gradient™ dashboard)
+✅ Database connection strings (PostgreSQL and Redis from DigitalOcean)
+
+### Step 2: Backend Implementation
+
+**Give Antigravity this:**
+
+```
+BACKEND IMPLEMENTATION REQUEST
+
+Technology Stack:
+- Python 3.11+
+- FastAPI framework
+- SQLAlchemy ORM
+- PostgreSQL database
+- Redis for queuing
+- httpx for async HTTP
+- Pydantic for validation
+
+Project Structure:
+[Copy the backend project structure from section 3]
+
+Required Files:
+[For each file from File 1 to File 19 in section 3, provide:]
+- File path
+- Complete code
+- Key requirements
+- Dependencies
+
+Key Integration Points:
+1. DigitalOcean Gradient™ AI Agent API
+   - Endpoint: https://api.digitalocean.com/v2/ai/agents/{agent_id}/chat
+   - Authentication: Bearer token
+   - Request format: [show example]
+   - Response format: [show example]
+
+2. GitHub API
+   - OAuth flow for authentication
+   - Webhook receiver with signature validation
+   - Repository file access
+   - PR creation
+
+3. Background Workers
+   - Must run as separate processes
+   - Consume from Redis queues
+   - Process sequentially: webhook → watcher → impact → generation → PR
+
+Environment Variables Required:
+[Copy from section 6]
+
+Testing Requirements:
+- Unit tests for all API endpoints
+- Integration tests for agent invocations
+- End-to-end test for complete workflow
+
+Deployment Target:
+- DigitalOcean App Platform
+- 4 separate services: API, webhook worker, orchestrator worker, PR creator worker
+```
+
+### Step 3: Frontend Implementation
+
+**Give Antigravity this:**
+
+```
+FRONTEND IMPLEMENTATION REQUEST
+
+Technology Stack:
+- React 18 with TypeScript
+- Vite for build tooling
+- Tailwind CSS for styling
+- Shadcn/ui component library
+- TanStack Query for data fetching
+- React Router for navigation
+- Axios for API calls
+
+Project Structure:
+[Copy the frontend project structure from section 4]
+
+Pages Required:
+1. Dashboard - Overview with stats and recent activity
+2. Repositories - List and manage repositories
+3. Repository Settings - Configure monitoring and thresholds
+4. Documentation Updates - List of PRs with review interface
+5. Analytics - Charts and metrics
+
+Components Required:
+[List all components with their props and behavior]
+
+API Integration:
+- Base URL: configured via VITE_API

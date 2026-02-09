@@ -1,0 +1,28 @@
+# Common
+.env
+.env.local
+.env.*.local
+.DS_Store
+*.log
+logs/
+
+# Dependencies
+node_modules/
+dist/
+build/
+__pycache__/
+*.py[cod]
+*$py.class
+.venv
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+.docker/
