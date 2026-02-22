@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #0a0a0c;
+  --color-foreground: #f8f8f2;
+
+  --color-accent-cyan: #00f2ff;
+  --color-accent-magenta: #ff00ff;
+  --color-accent-neon: #ccff00;
+
+  --color-surface: rgba(255, 255, 255, 0.05);
+  --color-surface-hover: rgba(255, 255, 255, 0.1);
+  --color-border: rgba(255, 255, 255, 0.1);
+
+  --shadow-glow: 0 0 10px var(--color-accent-cyan);
+  --shadow-neon: 0 0 15px rgba(0, 242, 255, 0.3);
+
+  --background-image-futuristic-grid: linear-gradient(rgba(0, 242, 255, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 242, 255, 0.1) 1px, transparent 1px);
+
+  --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-glow: glow 2s ease-in-out infinite alternate;
+
+  @keyframes glow {
+    0% {
+      box-shadow: 0 0 5px rgba(0, 242, 255, 0.2);
+    }
+
+    100% {
+      box-shadow: 0 0 20px rgba(0, 242, 255, 0.6);
+    }
+  }
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  @apply antialiased selection:bg-accent-cyan selection:text-background;
+  background-image: var(--background-image-futuristic-grid);
+  background-size: 40px 40px;
+  min-height: 100vh;
+}
+
+.glass-card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  @apply backdrop-blur-md rounded-2xl overflow-hidden shadow-2xl;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glow-text {
+  text-shadow: 0 0 10px var(--color-accent-cyan);
+}
+
+.neon-border {
+  border-color: rgba(0, 242, 255, 0.5);
+  box-shadow: var(--shadow-neon);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 242, 255, 0.2);
+  @apply rounded-full hover:bg-accent-cyan/40 transition-colors;
+}
