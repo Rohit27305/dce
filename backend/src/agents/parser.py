@@ -83,4 +83,4 @@ class AgentResponseParser:
         except Exception as e:
             logger.error(f"Content generator parse failure: {e}")
             content = raw_response["choices"][0]["message"]["content"]
-            return {"diff": content, "confidence_score": 0.5, "requires_human_review": True}
+            return {"updated_content": content, "confidence_score": 0.5, "requires_human_review": True}

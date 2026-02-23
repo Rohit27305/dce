@@ -41,6 +41,7 @@ class DocumentationUpdate(Base):
     
     # Documentation changes
     affected_files = Column(JSON, default=[])  # List of file paths
+    generated_updates = Column(JSON, default=[])  # List of {file_path, diff, confidence}
     changes_summary = Column(Text)  # Human-readable summary
     
     # AI metadata

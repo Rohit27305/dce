@@ -1,9 +1,25 @@
 import axios from 'axios';
-import type { InternalAxiosRequestConfig } from 'axios';
+import type { InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
 });
+
+// Response interceptor to handle the standard API response structure
+api.interceptors.response.use(
+    (response: AxiosResponse) => {
+        // Return only the 'data' part of our standard response if it exists
+        if (response.data && response.data.success !== undefined) {
+            return response.data.data;
+        }
+        return response.data;
+    },
+    (error) => {
+        const errorDetail = error.response?.data?.message || error.message || 'An unexpected error occurred';
+        console.error('API Error:', errorDetail);
+        return Promise.reject(errorDetail);
+    }
+);
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('auth_token');
@@ -14,31 +30,38 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 });
 
 export const dashboardService = {
-    getMetrics: async () => {
-        const { data } = await api.get('/metrics/dashboard');
-        return data;
+    getOverviewMetrics: async () => {
+        return await api.get('/metrics/dashboard');
     },
 };
 
 export const repositoryService = {
-    list: async () => {
-        const { data } = await api.get('/repositories/');
-        return data;
+    getAllConnected: async () => {
+        return await api.get('/repositories/');
     },
-    create: async (repoData: any) => {
-        const { data } = await api.post('/repositories/', repoData);
-        return data;
+    connectRepository: async (repositoryData: any) => {
+        return await api.post('/repositories/', repositoryData);
     },
-    analyze: async (repoId: string) => {
-        const { data } = await api.post(`/repositories/${repoId}/analyze`);
-        return data;
+    getGitHubInfo: async (url: string) => {
+        return await api.post('/repositories/fetch-metadata', { url });
     },
+    triggerSyncProtocol: async (repositoryId: string) => {
+        return await api.post(`/repositories/${repositoryId}/analyze`);
+    },
+    disconnectRepository: async (repositoryId: string) => {
+        return await api.delete(`/repositories/${repositoryId}`);
+    }
 };
 
 export const updatesService = {
-    list: async () => {
-        const { data } = await api.get('/documentation-updates/');
-        return data;
+    getRecentSyncHistory: async () => {
+        return await api.get('/documentation-updates/');
+    },
+    deleteUpdate: async (updateId: string) => {
+        return await api.delete(`/documentation-updates/${updateId}`);
+    },
+    deleteAllUpdates: async () => {
+        return await api.delete('/documentation-updates/all');
     },
 };
 

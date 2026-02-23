@@ -30,11 +30,7 @@ services:
   backend:
     build: 
       context: ./backend
-    environment:
-      DATABASE_URL: postgresql://user:password@db:5432/doc_enforcer
-      REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: ${SECRET_KEY:-supersecretkey}
-      # Add other required env vars here
+    env_file: .env
     volumes:
       - ./backend:/app
     depends_on:
@@ -66,9 +62,7 @@ services:
     build:
       context: ./backend
     command: python src/workers/webhook_processor.py
-    environment:
-      DATABASE_URL: postgresql://user:password@db:5432/doc_enforcer
-      REDIS_URL: redis://redis:6379/0
+    env_file: .env
     volumes:
       - ./backend:/app
     depends_on:
@@ -81,9 +75,20 @@ services:
     build:
       context: ./backend
     command: python src/workers/orchestrator.py
-    environment:
-      DATABASE_URL: postgresql://user:password@db:5432/doc_enforcer
-      REDIS_URL: redis://redis:6379/0
+    env_file: .env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker-pr:
+    build:
+      context: ./backend
+    command: python src/workers/pr_creator.py
+    env_file: .env
     volumes:
       - ./backend:/app
     depends_on:

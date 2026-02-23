@@ -8,15 +8,15 @@ const Dashboard: React.FC = () => {
     const [isAnalyzeModalOpen, setIsAnalyzeModalOpen] = useState(false);
     const [selectedRepo, setSelectedRepo] = useState<any>(null);
 
-    const { data: metrics } = useQuery({ queryKey: ['metrics'], queryFn: dashboardService.getMetrics });
-    const { data: repos } = useQuery({ queryKey: ['repositories'], queryFn: repositoryService.list });
-    const { data: updates } = useQuery({ queryKey: ['updates'], queryFn: updatesService.list });
+    const { data: metrics } = useQuery({ queryKey: ['metrics'], queryFn: dashboardService.getOverviewMetrics }) as any;
+    const { data: repos } = useQuery({ queryKey: ['repositories'], queryFn: repositoryService.getAllConnected }) as any;
+    const { data: updates } = useQuery({ queryKey: ['updates'], queryFn: updatesService.getRecentSyncHistory }) as any;
 
-    const analyzeRepoMutation = useMutation({
-        mutationFn: repositoryService.analyze,
+    const triggerSyncMutation = useMutation({
+        mutationFn: repositoryService.triggerSyncProtocol,
         onSuccess: () => {
             setIsAnalyzeModalOpen(false);
-            alert('Analysis triggered successfully!');
+            alert('Synchronization protocol initiated successfully!');
         }
     });
 
@@ -95,11 +95,11 @@ const Dashboard: React.FC = () => {
                         <div className="p-4 bg-white/5 border border-white/10 rounded-xl space-y-4">
                             <p className="text-sm text-foreground/70">Initiate a synchronization event to ensure documentation parity.</p>
                             <button
-                                onClick={() => analyzeRepoMutation.mutate(selectedRepo.id)}
-                                disabled={analyzeRepoMutation.isPending}
+                                onClick={() => triggerSyncMutation.mutate(selectedRepo.id)}
+                                disabled={triggerSyncMutation.isPending}
                                 className="w-full py-3 bg-accent-cyan text-background font-bold rounded-lg flex items-center justify-center gap-2 hover:bg-accent-neon transition-colors"
                             >
-                                {analyzeRepoMutation.isPending ? <Loader2 className="animate-spin" size={20} /> : <Zap size={20} />}
+                                {triggerSyncMutation.isPending ? <Loader2 className="animate-spin" size={20} /> : <Zap size={20} />}
                                 Trigger Sync Protocol
                             </button>
                         </div>
@@ -163,12 +163,21 @@ const RepoCard = ({ repo, onClick }: any) => (
 
 const ActivityItem = ({ update }: any) => (
     <div className="flex gap-4 p-3 rounded-xl hover:bg-white/5 transition-colors border border-transparent hover:border-white/10 group">
-        <div className="w-1.5 h-auto bg-accent-cyan/30 rounded-full group-hover:bg-accent-cyan transition-colors" />
+        <div className={`w-1.5 h-auto rounded-full group-hover:opacity-100 transition-colors ${update.status === 'completed' || update.status === 'merged' ? 'bg-accent-neon opacity-50' : 'bg-accent-cyan opacity-50'
+            }`} />
         <div className="flex-1 min-w-0">
             <p className="text-sm font-bold truncate">Sync Protocol #{update.id?.slice(0, 4) || '72A'}</p>
-            <p className="text-xs text-foreground/40 mt-1">Documentation payload generated for {update.file_path || 'unknown path'}</p>
+            <p className="text-xs text-foreground/40 mt-1">
+                {update.affected_files?.length || 0} files synchronized
+                {update.affected_files?.length > 0 && `: ${update.affected_files[0]}`}
+            </p>
             <div className="flex items-center gap-2 mt-2">
-                <div className="px-2 py-0.5 rounded text-[10px] bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20 font-bold uppercase">Confidence: {update.confidence_score ? `${update.confidence_score * 100}%` : '94%'}</div>
+                <div className="px-2 py-0.5 rounded text-[10px] bg-accent-cyan/10 text-accent-cyan border border-accent-cyan/20 font-bold uppercase">
+                    Confidence: {update.confidence_score || 0}%
+                </div>
+                <div className="text-[10px] text-foreground/30 font-mono">
+                    {update.created_at ? new Date(update.created_at).toLocaleTimeString() : ''}
+                </div>
             </div>
         </div>
     </div>

@@ -2,8 +2,10 @@
 Webhook receiver for GitHub events.
 """
 
-from fastapi import APIRouter, Header, Request, HTTPException
+from fastapi import APIRouter, Header, Request
 from src.core.redis_client import redis_client, WEBHOOK_QUEUE
+from src.core.responses import success_response
+from src.core.exceptions import BadRequestException
 import logging
 
 router = APIRouter()
@@ -16,10 +18,13 @@ async def receive_github_webhook(
     x_github_event: str = Header(None)
 ):
     """Receive and queue GitHub webhooks"""
-    body = await request.body()
+    try:
+        payload = await request.json()
+    except Exception:
+        raise BadRequestException("Invalid JSON payload")
+        
     # Logic to verify signature
     
-    payload = await request.json()
     if x_github_event == "push":
         event_data = {
             "event_type": x_github_event,
@@ -28,6 +33,6 @@ async def receive_github_webhook(
             "commits": payload.get("commits", [])
         }
         redis_client.enqueue(WEBHOOK_QUEUE, event_data)
-        return {"message": "Queued"}
+        return success_response(message="Event queued successfully")
     
-    return {"message": "Ignored"}
+    return success_response(message=f"Event '{x_github_event}' ignored")

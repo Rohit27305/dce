@@ -48,7 +48,8 @@ class AgentOrchestrator:
             repo = db.query(Repository).filter(Repository.id == task['repository_id']).first()
             if not repo: return
             
-            token = task.get('token', 'PLACEHOLDER_TOKEN')
+            # Priority: settings.GITHUB_TOKEN > task token
+            token = settings.GITHUB_TOKEN or task.get('token', 'PLACEHOLDER_TOKEN')
             knowledge_graph = knowledge_graph_service.get_mappings(repo.id)
             
             impact_result = await agent_invoker.invoke_as_impact_analyzer(
@@ -57,27 +58,33 @@ class AgentOrchestrator:
             logger.info(f"Impact Result: {impact_result}")
             
             doc_updates = []
-            if not impact_result.get('affected_documents'):
+            affected_docs = impact_result.get('affected_documents', [])
+            if not affected_docs:
                 logger.info("No affected documents found, but this is a manual trigger. Forcing README.md update.")
-                impact_result['affected_documents'] = [{"file_path": "README.md", "reason": "Manual sync request"}]
+                affected_docs = [{"file_path": "README.md", "reason": "Manual sync request"}]
             
-            for doc in impact_result.get('affected_documents', []):
+            for doc in affected_docs:
+                # Handle both string and dictionary formats from agent/cache
+                file_path = doc if isinstance(doc, str) else doc.get('file_path')
+                if not file_path:
+                    continue
+
                 try:
                     existing_content = await github_client.get_file_content(
-                        repo.owner, repo.name, doc['file_path'], repo.default_branch, token
+                        repo.owner, repo.name, file_path, repo.default_branch, token
                     )
                 except Exception as e:
-                    logger.warning(f"Error fetching content for {doc['file_path']}: {e}. Using fallback.")
+                    logger.warning(f"Error fetching content for {file_path}: {e}. Using fallback.")
                     existing_content = None
 
                 if not existing_content:
-                    logger.info(f"Using fallback content for {doc['file_path']}.")
+                    logger.info(f"Using fallback content for {file_path}.")
                     existing_content = "# Project Overview\n\nThis is a sample documentation file."
                 
                 update = await agent_invoker.invoke_as_content_generator(
-                    task['change_event'], existing_content, doc['file_path']
+                    task['change_event'], existing_content, file_path
                 )
-                update['file_path'] = doc['file_path']
+                update['file_path'] = file_path
                 doc_updates.append(update)
             
             if not doc_updates:
@@ -85,12 +92,14 @@ class AgentOrchestrator:
                 return
             
             avg_conf = sum(u.get('confidence_score', 0.8) for u in doc_updates) / len(doc_updates)
+            logger.info(f"Average confidence score: {avg_conf} (threshold: {settings.MIN_CONFIDENCE_THRESHOLD}), doc_updates count: {len(doc_updates)}")
             
             if avg_conf < (settings.MIN_CONFIDENCE_THRESHOLD if settings else 0.7):
-                return
+                logger.warning(f"Low confidence ({avg_conf:.2f}) — proceeding anyway for review")
             
-            # Create DB entry and enqueue for PR
-            desc = await agent_invoker.invoke_as_pr_creator(doc_updates, task['change_event'])
+            # Generate PR description locally (no AI call needed)
+            file_list = "\n".join([f"- `{u['file_path']}`" for u in doc_updates])
+            desc = f"## AI Documentation Sync\n\nThis PR updates the following documentation files:\n{file_list}\n\n**Confidence Score**: {int(avg_conf * 100)}%"
             
             # Save the DocumentationUpdate to the database
             db_update = DocumentationUpdate(
@@ -100,6 +109,7 @@ class AgentOrchestrator:
                 trigger_commit_message=task.get('change_event', {}).get('commit_message', 'Manual Analysis Trigger'),
                 trigger_author=task.get('change_event', {}).get('author', 'User'),
                 affected_files=[u['file_path'] for u in doc_updates],
+                generated_updates=doc_updates,
                 changes_summary=desc,
                 confidence_score=int(avg_conf * 100),
                 status=UpdateStatus.PENDING,
@@ -109,6 +119,13 @@ class AgentOrchestrator:
             db.add(db_update)
             db.commit()
             db.refresh(db_update)
+            
+            # Enqueue for PR creation
+            redis_client.enqueue(PR_CREATION_QUEUE, {
+                "update_id": str(db_update.id),
+                "repository_id": str(repo.id),
+                "token": token
+            })
             
             logger.info(f"PR generation complete for repo {repo.full_name}, Update ID: {db_update.id}")
         finally:

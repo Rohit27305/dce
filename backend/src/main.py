@@ -48,17 +48,41 @@ if settings and settings.CORS_ORIGINS:
 # Gzip compression
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+from src.core.exceptions import BaseAPIException
+from src.core.responses import error_response
+
+
 # Production-grade Global Exception Handler
+@app.exception_handler(BaseAPIException)
+async def api_exception_handler(request: Request, exc: BaseAPIException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=error_response(
+            message=exc.detail,
+            error_code=exc.error_code,
+            status_code=exc.status_code,
+            extra=exc.extra
+        )
+    )
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    status_code = 500
+    message = "An internal server error occurred."
+    error_code = "INTERNAL_ERROR"
+    
+    if settings.DEBUG:
+        message = str(exc)
+        error_code = exc.__class__.__name__
+        
     return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "An internal server error occurred.",
-            "type": exc.__class__.__name__ if settings and settings.DEBUG else "InternalServerError",
-            "message": str(exc) if settings and settings.DEBUG else "Please contact support."
-        }
+        status_code=status_code,
+        content=error_response(
+            message=message,
+            error_code=error_code,
+            status_code=status_code
+        )
     )
 
 # Middlewares for logging and performance monitoring
