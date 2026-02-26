@@ -15,6 +15,7 @@ class RepositoryCreate(BaseModel):
     owner: str
     name: str
     default_branch: Optional[str] = "main"
+    is_private: Optional[bool] = False
 
 class RepositoryFetchMetadata(BaseModel):
     url: str
@@ -23,6 +24,7 @@ class RepositoryResponse(RepositoryBase):
     id: UUID
     github_repo_id: int
     enabled: bool
+    is_private: bool
     created_at: datetime
     updated_at: datetime
     total_prs_created: int

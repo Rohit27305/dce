@@ -1,49 +1,50 @@
-# 🎮 Demo Walkthrough (First Run)
+# 🎮 Demo Walkthrough (DCE)
 
-Welcome to the **Documentation Consistency Enforcer**! This guide will help you test the core "Sync" functionality as a first-time user.
-
-## 🏁 Prerequisites
-1.  Verify the system is running using `docker ps`.
-2.  Ensure you have followed [GITHUB_SETUP.md](./GITHUB_SETUP.md) and filled your `.env`.
+Welcome to the **Documentation Consistency Engine (DCE)**! This guide will help you experience the full sync cycle—from repository connection to AI-generated Pull Requests.
 
 ---
 
-## 🚀 Step 1: Access the Dashboard
-Open your resident browser and navigate to:
+## 🚀 Step 1: The Command Hub
+Open your browser and navigate to:
 **[http://localhost:3000](http://localhost:3000)**
 
-You should see the futuristic **Command Hub**. At this stage, it will likely show "No Active Repositories".
+Explore the **DCE Dashboard**:
+- Observe the **Stat Cards** (Repositories, PRs Created, etc.).
+- Notice the **Live Flow** activity stream on the right.
+- Check your user profile by clicking the avatar in the top-right corner.
 
 ---
 
-## 🛠️ Step 2: Connect a Repository
-1.  Click on the **"Protocols"** (Databases icon) tab in the navbar.
-2.  Click **"Add Repository"**.
-3.  Enter the URL of a GitHub repository you own or have push access to.
-4.  The system will perform an initial scan of the codebase and its current `README.md`.
+## 🛠️ Step 2: Connect your First Asset
+1.  Navigate to the **Repositories** page via the sidebar (Database icon).
+2.  Click **"Connect Repository"**.
+3.  Enter a URL for a project you want to document (e.g., `https://github.com/your-user/your-repo`).
+4.  Click **"Fetch"** followed by **"Confirm Connection"**.
+5.  *Note: If it's a private repo, ensure your `GITHUB_TOKEN` is set in the backend env.*
 
 ---
 
-## 🧠 Step 3: Trigger an AI Sync
-Now, let's see the agent in action.
+## 🧠 Step 3: Trigger the Sync Protocol
+Let's manually trigger the AI agents to analyze your repository.
 
-1.  Open your IDE and make a significant change to a core function in your repository (e.g., change a return type or add a new mandatory parameter).
-2.  **Commit and Push** the change to GitHub.
-3.  Back in the Dashboard, navigate to the **"Sync Protocols"** tab.
-4.  You will see a new entry appearing (e.g., `#SY-4091`).
-5.  Click on it to see the **AI Analysis**:
-    - The **DigitalOcean Gradient™ AI** will explain *why* the documentation is now inconsistent.
-    - It will generate a **Unified Diff** to update the README.
+1.  On the Repositories page, locate your new card.
+2.  Click the **"Sync Protocol"** button (Refreshing arrows).
+3.  In the modal, click **"Execute Sync"**.
+4.  Switch to the **Sync Events** page (`http://localhost:3000/updates`).
 
 ---
 
-## 📬 Step 4: Verification
-1.  If the **Confidence** score is above 95%, a Pull Request will be automatically created on your GitHub repo.
-2.  Check your repo's **Pull Requests** tab. You'll find a PR titled `[DOCS] Update documentation for core/config.py`.
-3.  Review and merge!
+## 📬 Step 4: AI Analysis & PR Creation
+1.  In the **Sync Events** stream, you will see a new entry being processed.
+2.  Once finished, click the card to expand the **Analysis Report**. The **Lead Impact Architect** agent will explain which files were affected.
+3.  Click **"Review PR"**. This will take you directly to your GitHub repository where a new Pull Request has been created with the AI-generated documentation changes.
+4.  Review the Markdown diff and **Merge** the PR!
 
 ---
 
-## 🛡️ Troubleshooting
-- **No Sync entries?**: Check the worker logs: `docker compose logs -f worker-webhook`.
-- **Agent error?**: Verify your `GRADIENT_AGENT_URL` and `ACCESS_KEY` in the root `.env`.
+## 🛡️ Support & Monitoring
+- **Real-time Logs**: See the agents working in the terminal: `docker compose logs -f backend`.
+- **Confidence Scores**: If an update has a low trust factor (< 70%), it will be flagged in the UI for mandatory manual review.
+
+---
+*DCE - Keeping code and docs in perfect synchronicity.*

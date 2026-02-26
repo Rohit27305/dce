@@ -26,6 +26,7 @@ class Repository(Base):
     owner = Column(String, nullable=False)
     name = Column(String, nullable=False)
     default_branch = Column(String, default="main")
+    is_private = Column(Boolean, default=False)
     
     # Monitoring settings
     enabled = Column(Boolean, default=True)

@@ -99,7 +99,7 @@ class AgentOrchestrator:
             
             # Generate PR description locally (no AI call needed)
             file_list = "\n".join([f"- `{u['file_path']}`" for u in doc_updates])
-            desc = f"## AI Documentation Sync\n\nThis PR updates the following documentation files:\n{file_list}\n\n**Confidence Score**: {int(avg_conf * 100)}%"
+            desc = f"## 🧠 DCE AI Documentation Sync\n\nThis PR updates the following documentation files to align with recent code changes:\n{file_list}\n\n**Confidence Score**: {int(avg_conf * 100)}%\n\n*Generated automatically by the Documentation Consistency Engine.*"
             
             # Save the DocumentationUpdate to the database
             db_update = DocumentationUpdate(

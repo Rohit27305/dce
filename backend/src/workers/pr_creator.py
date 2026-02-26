@@ -154,8 +154,7 @@ class PRCreatorWorker:
             # 4. Create Pull Request
             try:
                 pr_title = f"docs: AI-generated documentation update for {repo.name}"
-                pr_body = update.changes_summary or "AI-generated documentation synchronization."
-                pr_body += f"\n\n---\n*Created by [DCEA](https://github.com/Rohit27305/dce) — AI Documentation Agent*"
+                pr_body = update.changes_summary or "AI-generated documentation update."
                 
                 if use_fork:
                     # Cross-repo PR: head = "fork_owner:branch_name"

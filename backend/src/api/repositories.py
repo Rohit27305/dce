@@ -20,13 +20,13 @@ from src.schemas.base import StandardResponse
 router = APIRouter()
 
 def get_or_create_demo_user(db: Session):
-    user = db.query(User).filter(User.github_username == "demo_user").first()
+    user = db.query(User).filter(User.github_username == "Rohit").first()
     if not user:
         user = User(
             id=uuid.uuid4(),
-            github_id="demo_id",
-            github_username="demo_user",
-            github_access_token="demo_token",
+            github_id="rohit_id",
+            github_username="Rohit",
+            github_access_token="ghp_rohit_token",
             is_active=True
         )
         db.add(user)
@@ -42,7 +42,8 @@ async def get_all_repositories(db: Session = Depends(get_db)):
 
 @router.post("/fetch-metadata", response_model=StandardResponse[dict])
 async def get_github_repository_info(payload: RepositoryFetchMetadata):
-    """Fetch repository metadata from GitHub URL for onboarding"""
+    """Fetch repository metadata from GitHub URL for onboarding.
+    Works for both public and private repos (if GITHUB_TOKEN has access)."""
     repository_url = payload.url
     if not repository_url:
         raise BadRequestException("GitHub URL is required")
@@ -53,6 +54,9 @@ async def get_github_repository_info(payload: RepositoryFetchMetadata):
     
     github_details = await github_service.get_repo_details(parsed_info["owner"], parsed_info["repo"])
     
+    # Fetch branches in parallel
+    branches = await github_service.list_branches(parsed_info["owner"], parsed_info["repo"])
+    
     return success_response(data={
         "github_repo_id": github_details.get("id"),
         "full_name": github_details.get("full_name"),
@@ -60,8 +64,11 @@ async def get_github_repository_info(payload: RepositoryFetchMetadata):
         "name": github_details.get("name"),
         "default_branch": github_details.get("default_branch"),
         "description": github_details.get("description"),
-        "stargazers_count": github_details.get("stargazers_count")
+        "stargazers_count": github_details.get("stargazers_count"),
+        "private": github_details.get("private", False),
+        "branches": branches,
     }, message="GitHub repository information retrieved successfully")
+
 
 @router.post("/", response_model=StandardResponse[RepositoryResponse])
 async def connect_new_repository(repo_data: RepositoryCreate, db: Session = Depends(get_db)):
@@ -80,7 +87,8 @@ async def connect_new_repository(repo_data: RepositoryCreate, db: Session = Depe
         full_name=repo_data.full_name,
         owner=repo_data.owner,
         name=repo_data.name,
-        default_branch=repo_data.default_branch or "main"
+        default_branch=repo_data.default_branch or "main",
+        is_private=repo_data.is_private or False
     )
     
     try:
@@ -94,7 +102,7 @@ async def connect_new_repository(repo_data: RepositoryCreate, db: Session = Depe
 
 @router.post("/{repository_id}/analyze", response_model=StandardResponse[RepositorySyncTriggerResponse])
 async def trigger_repository_sync(repository_id: str, db: Session = Depends(get_db)):
-    """Trigger documentation synchronization analysis for a repository"""
+    """Trigger documentation analysis for a repository — folder-by-folder"""
     try:
         repository_uuid = uuid.UUID(repository_id)
     except ValueError:
@@ -110,19 +118,49 @@ async def trigger_repository_sync(repository_id: str, db: Session = Depends(get_
     )
 
     doc_priority = ['readme', 'contributing', 'changelog', 'license', 'docs/', 'doc/', '.md']
-    code_exts = ('.py', '.ts', '.js', '.go', '.java', '.rs', '.rb', '.tsx', '.jsx')
+    code_exts = ('.py', '.ts', '.js', '.go', '.java', '.rs', '.rb', '.tsx', '.jsx', '.c', '.cpp', '.h', '.cs', '.php', '.swift', '.kt')
 
     doc_files = [f for f in file_tree if any(k in f.lower() for k in doc_priority)][:20]
-    code_files = [f for f in file_tree if f.endswith(code_exts) and f not in doc_files][:30]
+    code_files = [f for f in file_tree if f.endswith(code_exts) and f not in doc_files][:50]
 
-    # Fetch actual content of top documentation files
+    # Fetch content of docs AND key code files so the AI has real source to reference
     key_contents: dict = {}
+
+    # Docs first
     for path in doc_files[:5]:
         content = await github_service.get_file_content_text(
             repository.owner, repository.name, path, repository.default_branch
         )
         if content:
             key_contents[path] = content[:3000]
+
+    # Then prioritize code files: entry points, configs, then others
+    priority_patterns = ['main.', 'app.', 'index.', 'server.', 'setup.', 'manage.', 'package.json', 'requirements.txt',
+                         'Cargo.toml', 'go.mod', 'pom.xml', 'Makefile', 'Dockerfile', 'pyproject.toml']
+    config_files = [f for f in file_tree if any(p in f.lower() for p in priority_patterns)]
+
+    # Fetch priority files first
+    for path in config_files[:5]:
+        if path not in key_contents:
+            content = await github_service.get_file_content_text(
+                repository.owner, repository.name, path, repository.default_branch
+            )
+            if content:
+                key_contents[path] = content[:2000]
+
+    # Then sample code files from different folders for diversity
+    seen_folders: set = set()
+    for path in code_files:
+        folder = "/".join(path.split("/")[:-1]) or "(root)"
+        if folder not in seen_folders and path not in key_contents:
+            content = await github_service.get_file_content_text(
+                repository.owner, repository.name, path, repository.default_branch
+            )
+            if content:
+                key_contents[path] = content[:2000]
+                seen_folders.add(folder)
+            if len(key_contents) >= 15:
+                break
 
     sync_task = {
         "repository_id": str(repository.id),
@@ -131,12 +169,12 @@ async def trigger_repository_sync(repository_id: str, db: Session = Depends(get_
             "timestamp": "now",
             "repository": repository.full_name,
             "branch": repository.default_branch,
-            "description": f"User requested full documentation sync for {repository.full_name}.",
-            "summary": f"Analyze {repository.full_name} and update its documentation to be accurate and complete.",
+            "description": f"Full documentation analysis for {repository.full_name}.",
+            "summary": f"Analyze {repository.full_name} code structure and generate accurate documentation.",
             "author": "System",
-            "repo_file_tree": file_tree[:80],
+            "repo_file_tree": file_tree[:120],
             "doc_files": doc_files,
-            "code_files": code_files[:20],
+            "code_files": code_files[:40],
             "key_file_contents": key_contents,
         }
     }
@@ -144,11 +182,11 @@ async def trigger_repository_sync(repository_id: str, db: Session = Depends(get_
     try:
         is_enqueued = redis_client.enqueue(IMPACT_ANALYSIS_QUEUE, sync_task)
         if not is_enqueued:
-            raise InternalServerError("Failed to enqueue sync task")
+            raise InternalServerError("Failed to enqueue analysis task")
     except Exception as e:
-        raise InternalServerError(f"Orchestrator communication error (Redis): {str(e)}") from e
+        raise InternalServerError(f"Queue error: {str(e)}") from e
 
-    return success_response(data={"repository": repository.full_name}, message="Synchronization protocol triggered successfully")
+    return success_response(data={"repository": repository.full_name}, message="Documentation analysis triggered")
 
 @router.delete("/{repository_id}")
 async def disconnect_repository(repository_id: str, db: Session = Depends(get_db)):

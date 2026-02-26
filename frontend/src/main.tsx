@@ -18,7 +18,6 @@ const App = () => (
           <Route path="/" element={<Dashboard />} />
           <Route path="/repositories" element={<RepositoriesPage />} />
           <Route path="/updates" element={<DocumentationUpdatesPage />} />
-          <Route path="/settings" element={<div className="flex items-center justify-center h-[60vh] text-4xl font-black glow-text animate-pulse">SYSTEM_CORE_LOCKED</div>} />
         </Routes>
       </Layout>
     </BrowserRouter>

@@ -20,7 +20,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             </main>
 
             <footer className="px-6 py-8 text-center text-foreground/40 text-xs border-t border-white/5">
-                <p>© 2026 Documentation Consistency Enforcer. Powered by DigitalOcean Gradient AI.</p>
+                <p>© 2026 Documentation Consistency Engine</p>
             </footer>
         </div>
     );

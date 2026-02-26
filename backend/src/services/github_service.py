@@ -19,11 +19,20 @@ class GitHubService:
             response = await client.get(url, headers=self.headers)
             
             if response.status_code == 404:
-                raise BadRequestException(f"Repository {owner}/{repo} not found on GitHub.")
+                raise BadRequestException(f"Repository {owner}/{repo} not found on GitHub. If it's private, make sure your GITHUB_TOKEN has access.")
             if response.status_code != 200:
                 raise InternalServerError(f"GitHub API error: {response.text}")
             
             return response.json()
+
+    async def list_branches(self, owner: str, repo: str, per_page: int = 30) -> List[str]:
+        """Fetch list of branch names for a repository."""
+        async with httpx.AsyncClient(timeout=10) as client:
+            url = f"{self.base_url}/repos/{owner}/{repo}/branches?per_page={per_page}"
+            response = await client.get(url, headers=self.headers)
+            if response.status_code != 200:
+                return []
+            return [b["name"] for b in response.json()]
 
     async def get_file_tree(self, owner: str, repo: str, branch: str = "main") -> List[str]:
         """Fetch a flat list of file paths in the repo using the Git Trees API."""
