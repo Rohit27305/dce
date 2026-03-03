@@ -38,11 +38,7 @@ class Settings(BaseSettings):
     GRADIENT_AGENT_URL: str = os.getenv("GRADIENT_AGENT_URL", "")
     
     # CORS
-    CORS_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://yourdomain.com"
-    ]
+    CORS_ORIGINS: List[str] = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173,http://dce.rohitverma.social").split(",")
     
     # Agent Configuration
     AGENT_MODEL: str = os.getenv("AGENT_MODEL", "claude-3-5-sonnet-20241022")
