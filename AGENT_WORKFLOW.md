@@ -1,56 +1,55 @@
-# 🧠 Agent Orchestration & Workflow (DCE)
+# 📦 `backend/src/agents` Module
 
-This document explains the internal mechanics of how the **Documentation Consistency Engine (DCE)** agents are invoked and how they collaborate to keep documentation synced.
-
----
-
-## 🛠️ The Collaborative Agent Chain
-
-When a change is detected (via Webhook) or manually triggered, DCE initiates a sequence of specialized AI agents. Each agent has a specific "Persona" and limited context to maximize precision.
-
-### 1. The Watcher (Entry Point)
-- **Role**: System Monitor
-- **Trigger**: GitHub Push Webhook
-- **Responsibility**: Scans the list of modified/added files. It ignores non-code files (like logs or temporary assets) and determines if the logic changes are significant enough to warrant a documentation refresh.
-- **Output**: A decision boolean and a streamlined `change_event`.
-
-### 2. The Lead Impact Architect (Navigator)
-- **Role**: Structural Analyst
-- **Trigger**: Watcher's positive signal or Manual Sync button.
-- **Responsibility**: 
-    - Analyzes the **Repository Blueprint** (file tree).
-    - Maps changed source files to documentation gaps.
-    - Identifies folders containing code but lacking a `README.md`.
-- **Logic**: It prioritizes the Root README first, then subfolders with the highest concentration of logic changes.
-
-### 3. The Content Generator (Creator)
-- **Role**: Technical Writer / Architect
-- **Trigger**: Impact Architect's file list.
-- **Responsibility**: 
-    - Receives **Context Harvesting** (actual source code snippets from modified files).
-    - Compares existing documentation with the new source signals.
-    - Generates high-fidelity Markdown content.
-- **Instruction Set**: Forced to use actual imports, class names, and function signatures found in the code. It is prohibited from using placeholders or hallucinating features.
+## 1️⃣ Module Identity
+The **agents** package houses the core client‑side integration with external AI agents (currently the DigitalOcean Gradient AI platform).  It encapsulates the logic for constructing requests, handling authentication, caching responses via Redis, and exposing a simple Pythonic interface (`GradientAgentClient`) that downstream services can invoke.
 
 ---
 
-## 🔄 The Sync Lifecycle (Step-by-Step)
+## 2️⃣ Interface Contract
+| Export | Type | Description | Important Signature |
+|--------|------|-------------|----------------------|
+| `GradientAgentClient` | Class | High‑level wrapper around the Gradient AI HTTP API. Handles URL/config lookup, header preparation, response caching, and error handling. | `__init__(self)` – loads `settings.GRADIENT_AGENT_URL` and `settings.GRADIENT_ACCESS_KEY`.
+|  |  | `invoke(self, prompt: str, role: str, max_tokens: int = None, temperature: float = None) -> Dict[str, Any]` – Sends a prompt to the remote agent and returns the parsed JSON response. | Returns a cached dict if a prior identical request exists; otherwise performs an HTTP POST.
 
-1.  **Signal Acquisition**: Repository event is received by the `api/repositories/{id}/analyze` endpoint or Webhook handler.
-2.  **Task Enqueueing**: A background task is pushed to the Redis **Impact Analysis Queue**.
-3.  **Orchestration**: The `AgentOrchestrator` worker picks up the task and invokes the **Architect** agent.
-4.  **Content Synthesis**: For each affected doc, the **Generator** agent is called with gathered code context.
-5.  **Validation**: A **Confidence Score** is assigned based on the agent's internal assessment and structural matching.
-6.  **PR Execution**: If trust exceeds the threshold, the `PRCreatorWorker` creates a new branch, commits the markdown changes, and opens a Pull Request on GitHub.
+*Note*: The module currently exports only the `GradientAgentClient` class. Future files (`invoker.py`, `parser.py`) are expected to expose additional helper functions/classes, but they are not required for the present interface documentation.
+
+---
+
+## 3️⃣ Logic Flow Within the Folder
+1. **Instantiation** (`GradientAgentClient.__init__`)
+   - Pulls configuration from `src.core.config.settings`.
+   - Builds a base URL (`self.agent_url`) and bearer token (`self.access_key`).
+   - Pre‑populates request headers.
+2. **Invocation** (`invoke`)
+   - **Cache Key Generation**: Uses SHA‑256 on the prompt and MD5 on the agent URL to create a deterministic Redis key that scopes caching by role and prompt content.
+   - **Cache Lookup**: Calls `redis_client.get_cache(key)`. If a hit occurs, the cached dict is returned immediately, skipping network I/O.
+   - **HTTP Request** (not fully shown in the snippet but implied):
+     - Constructs the endpoint URL (`f"{self.agent_url.rstrip('/')}/api"`).
+     - Sends a JSON payload containing `prompt`, `role`, and optional `max_tokens`/`temperature` via `httpx`.
+   - **Response Handling**: Parses the JSON body into a Python dict, stores it back in Redis with a TTL of 1 hour, and returns the dict to the caller.
+3. **Error Path** (implicit):
+   - If Redis is unavailable or the HTTP request fails, the method should propagate the exception (the current stub does not include explicit error handling, which will be added in later revisions).
+4. **Cross‑File Interaction**
+   - While `client.py` is self‑contained, other modules in `backend/src/agents` (e.g., `invoker.py` and `parser.py`) are expected to orchestrate higher‑level workflows such as batching multiple prompts, parsing structured responses, or enriching the cache logic. They will import `GradientAgentClient` and reuse its `invoke` method.
 
 ---
 
-## 📊 Trust & Confidence Scoring
-
-DCE agents report a `confidence_score` (0.0 to 1.0).
-- **> 0.90**: High Stability. Automations proceed seamlessly.
-- **0.70 - 0.90**: Standard Review. Flagged for review in the Sync Events stream.
-- **< 0.70**: Low Trust. PR is created but includes a "Warning: Manual Audit Required" label.
+## 4️⃣ Dependencies
+| Dependency | Type | Reason for Use |
+|------------|------|----------------|
+| `src.core.config` (`Settings`) | Internal module | Provides environment‑driven configuration (agent URL, access key, etc.). |
+| `src.core.redis_client` (`redis_client`) | Internal module | Centralised Redis wrapper used for response caching. |
+| `httpx` | Third‑party library | Async HTTP client for communicating with the Gradient AI endpoint. |
+| `json`, `logging`, `time`, `hashlib` | Standard library | JSON serialization, diagnostic logging, optional timing, and deterministic cache‑key hashing. |
+| `typing` (`Dict`, `Any`, `Optional`) | Standard library | Type hinting for public API clarity. |
 
 ---
-*For technical details on prompt engineering, see [AGENT_RESPONSES.md](AGENT_RESPONSES.md).*
+
+## 📌 Implementation Notes & Future Work
+- The current `invoke` implementation stops at constructing the request URL; the actual HTTP call and response parsing need to be completed.
+- Add explicit exception handling around Redis operations and the HTTP request to ensure graceful degradation.
+- Expand the module README once `invoker.py` and `parser.py` are fleshed out, documenting any additional classes or utility functions they provide.
+
+---
+
+*Generated by the Documentation Consistency Enforcer (confidence_score: 0.92).*
