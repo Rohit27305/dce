@@ -38,16 +38,14 @@ class Settings(BaseSettings):
     GRADIENT_ACCESS_KEY: str = os.getenv("GRADIENT_ACCESS_KEY", "")
     GRADIENT_AGENT_URL: str = os.getenv("GRADIENT_AGENT_URL", "")
     # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173", "http://dce.rohitverma.social"]
+    CORS_ORIGINS: Any = ["http://localhost:3000", "http://localhost:5173", "http://dce.rohitverma.social"]
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Any) -> Union[List[str], str]:
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip() for i in v.split(",")]
-        elif isinstance(v, (list, str)):
-            return v
-        raise ValueError(v)
+        return v
     
     # Agent Configuration
     AGENT_MODEL: str = os.getenv("AGENT_MODEL", "claude-3-5-sonnet-20241022")
