@@ -21,7 +21,7 @@ const Login: React.FC = () => {
         formData.append('password', password);
 
         try {
-            const data = await authService.login(formData);
+            const data = await authService.login(username, password);
             localStorage.setItem('auth_token', data.access_token);
             localStorage.setItem('username', data.username);
             navigate('/');

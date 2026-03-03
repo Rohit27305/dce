@@ -66,8 +66,16 @@ export const updatesService = {
 };
 
 export const authService = {
-    login: async (credentials: FormData) => {
-        const response = await axios.post(`${import.meta.env.VITE_API_URL || '/api'}/auth/login`, credentials);
+    login: async (username: string, password: string) => {
+        const params = new URLSearchParams();
+        params.append('username', username);
+        params.append('password', password);
+
+        const response = await axios.post(`${import.meta.env.VITE_API_URL || '/api'}/auth/login`, params, {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        });
         return response.data;
     },
 };
