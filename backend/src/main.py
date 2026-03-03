@@ -119,9 +119,15 @@ if metrics:
 @app.on_event("startup")
 async def startup_event():
     logger.info("Starting Documentation Consistency Enforcer API")
-    # Database table creation would happen here or via migrations
-
-@app.on_event("shutdown")
+    # Import models to ensure they are registered with Base metadata
+    from src.models.user import User
+    from src.models.repository import Repository
+    from src.models.documentation_update import DocumentationUpdate
+    from src.core.database import engine, Base
+    
+    # Create database tables if they don't exist
+    Base.metadata.create_all(bind=engine)
+    logger.info("Database tables verified/created")
 async def shutdown_event():
     logger.info("Shutting down Documentation Consistency Enforcer API")
 
