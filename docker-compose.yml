@@ -30,7 +30,7 @@ services:
   backend:
     build: 
       context: ./backend
-    env_file: .env
+    env_file: ./backend/.env
     volumes:
       - ./backend:/app
     depends_on:
@@ -62,7 +62,7 @@ services:
     build:
       context: ./backend
     command: python src/workers/webhook_processor.py
-    env_file: .env
+    env_file: ./backend/.env
     volumes:
       - ./backend:/app
     depends_on:
@@ -75,7 +75,7 @@ services:
     build:
       context: ./backend
     command: python src/workers/orchestrator.py
-    env_file: .env
+    env_file: ./backend/.env
     volumes:
       - ./backend:/app
     depends_on:
@@ -88,7 +88,7 @@ services:
     build:
       context: ./backend
     command: python src/workers/pr_creator.py
-    env_file: .env
+    env_file: ./backend/.env
     volumes:
       - ./backend:/app
     depends_on:

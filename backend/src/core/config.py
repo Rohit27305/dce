@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     APP_NAME: str = "Documentation Consistency Enforcer"
     DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
     SECRET_KEY: str = os.getenv("SECRET_KEY", "dev_secret_key_change_me_in_production")
+
+    # Security
+    ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "admin")
+    ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "admin123")
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 1 week
     
     # Database
     DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/doc_enforcer")

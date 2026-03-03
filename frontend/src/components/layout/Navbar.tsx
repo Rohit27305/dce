@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Database, FileText, Zap, ChevronDown, Bell } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { LayoutDashboard, Database, FileText, Zap, ChevronDown, Bell, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Navbar: React.FC = () => {
     const location = useLocation();
+    const navigate = useNavigate();
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+    const handleLogout = () => {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('username');
+        navigate('/login');
+    };
 
     const navItems = [
         { name: 'Dashboard', path: '/', icon: LayoutDashboard },
@@ -85,11 +92,20 @@ const Navbar: React.FC = () => {
                                     initial={{ opacity: 0, y: 10, scale: 0.95 }}
                                     animate={{ opacity: 1, y: 0, scale: 1 }}
                                     exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                    className="absolute right-0 mt-3 w-40 glass-card p-4 shadow-2xl border border-white/10 z-[110] overflow-hidden text-center"
+                                    className="absolute right-0 mt-3 w-48 glass-card p-2 shadow-2xl border border-white/10 z-[110] overflow-hidden"
                                 >
-                                    <span className="text-sm font-black text-accent-cyan tracking-tight">
-                                        @Rohit
-                                    </span>
+                                    <div className="p-3 border-b border-white/5 mb-1">
+                                        <p className="text-sm font-black text-accent-cyan tracking-tight">@Rohit</p>
+                                        <p className="text-[10px] text-foreground/40">Administrator</p>
+                                    </div>
+
+                                    <button
+                                        onClick={handleLogout}
+                                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-red-400 hover:bg-red-500/10 transition-colors text-sm font-bold"
+                                    >
+                                        <LogOut size={16} />
+                                        Logout Session
+                                    </button>
                                 </motion.div>
                             </>
                         )}

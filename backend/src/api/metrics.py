@@ -11,10 +11,12 @@ from src.core.responses import success_response
 from src.models.repository import Repository
 from src.models.documentation_update import DocumentationUpdate
 
+from src.core.auth import get_current_user
+
 router = APIRouter()
 
 @router.get("/dashboard")
-async def get_dashboard_metrics(db: Session = Depends(get_db)):
+async def get_dashboard_metrics(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     """Get high-level metrics for the dashboard — computed from real DB data"""
 
     active_repositories = db.query(Repository).filter(Repository.enabled == True).count()

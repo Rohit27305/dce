@@ -12,17 +12,18 @@ from src.schemas.documentation import DocumentationUpdateResponse
 from src.schemas.base import StandardResponse
 from typing import List
 import uuid
+from src.core.auth import get_current_user
 
 router = APIRouter()
 
 @router.get("/", response_model=StandardResponse[List[DocumentationUpdateResponse]])
-async def list_updates(db: Session = Depends(get_db)):
+async def list_updates(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     """List all documentation updates"""
     updates = db.query(DocumentationUpdate).order_by(DocumentationUpdate.created_at.desc()).all()
     return success_response(data=updates, message="Documentation updates retrieved successfully")
 
 @router.delete("/all")
-async def delete_all_updates(db: Session = Depends(get_db)):
+async def delete_all_updates(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     """Delete all documentation updates"""
     try:
         count = db.query(DocumentationUpdate).delete()
@@ -33,7 +34,7 @@ async def delete_all_updates(db: Session = Depends(get_db)):
         raise InternalServerError(f"Failed to delete updates: {str(e)}")
 
 @router.get("/{update_id}", response_model=StandardResponse[DocumentationUpdateResponse])
-async def get_update_details(update_id: str, db: Session = Depends(get_db)):
+async def get_update_details(update_id: str, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     """Get details for a specific documentation update"""
     update = db.query(DocumentationUpdate).filter(DocumentationUpdate.id == update_id).first()
     if not update:
@@ -41,7 +42,7 @@ async def get_update_details(update_id: str, db: Session = Depends(get_db)):
     return success_response(data=update, message="Documentation update details retrieved successfully")
 
 @router.delete("/{update_id}")
-async def delete_update(update_id: str, db: Session = Depends(get_db)):
+async def delete_update(update_id: str, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     """Delete a specific documentation update"""
     try:
         update_uuid = uuid.UUID(update_id)

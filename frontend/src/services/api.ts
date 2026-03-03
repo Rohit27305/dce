@@ -65,4 +65,11 @@ export const updatesService = {
     },
 };
 
+export const authService = {
+    login: async (credentials: FormData) => {
+        const response = await axios.post(`${import.meta.env.VITE_API_URL || '/api'}/auth/login`, credentials);
+        return response.data;
+    },
+};
+
 export default api;

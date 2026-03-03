@@ -9,6 +9,7 @@ from src.core.redis_client import redis_client, IMPACT_ANALYSIS_QUEUE
 from src.core.exceptions import BadRequestException, NotFoundException, InternalServerError
 from src.core.responses import success_response
 from src.services.github_service import github_service
+from src.core.auth import get_current_user
 from src.schemas.repository import (
     RepositoryResponse, 
     RepositoryCreate, 
@@ -35,13 +36,13 @@ def get_or_create_demo_user(db: Session):
     return user
 
 @router.get("/", response_model=StandardResponse[List[RepositoryResponse]])
-async def get_all_repositories(db: Session = Depends(get_db)):
+async def get_all_repositories(db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     """List all connected repositories"""
     repositories = db.query(Repository).all()
     return success_response(data=repositories, message="Repositories retrieved successfully")
 
 @router.post("/fetch-metadata", response_model=StandardResponse[dict])
-async def get_github_repository_info(payload: RepositoryFetchMetadata):
+async def get_github_repository_info(payload: RepositoryFetchMetadata, current_user: str = Depends(get_current_user)):
     """Fetch repository metadata from GitHub URL for onboarding.
     Works for both public and private repos (if GITHUB_TOKEN has access)."""
     repository_url = payload.url
@@ -71,7 +72,7 @@ async def get_github_repository_info(payload: RepositoryFetchMetadata):
 
 
 @router.post("/", response_model=StandardResponse[RepositoryResponse])
-async def connect_new_repository(repo_data: RepositoryCreate, db: Session = Depends(get_db)):
+async def connect_new_repository(repo_data: RepositoryCreate, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     """Add a new repository for monitoring"""
     current_user = get_or_create_demo_user(db)
     
@@ -101,7 +102,7 @@ async def connect_new_repository(repo_data: RepositoryCreate, db: Session = Depe
         raise InternalServerError(f"Failed to save repository connection: {str(e)}")
 
 @router.post("/{repository_id}/analyze", response_model=StandardResponse[RepositorySyncTriggerResponse])
-async def trigger_repository_sync(repository_id: str, db: Session = Depends(get_db)):
+async def trigger_repository_sync(repository_id: str, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     """Trigger documentation analysis for a repository — folder-by-folder"""
     try:
         repository_uuid = uuid.UUID(repository_id)
@@ -189,7 +190,7 @@ async def trigger_repository_sync(repository_id: str, db: Session = Depends(get_
     return success_response(data={"repository": repository.full_name}, message="Documentation analysis triggered")
 
 @router.delete("/{repository_id}")
-async def disconnect_repository(repository_id: str, db: Session = Depends(get_db)):
+async def disconnect_repository(repository_id: str, db: Session = Depends(get_db), current_user: str = Depends(get_current_user)):
     """Diconnect and remove a repository from monitoring"""
     try:
         repository_uuid = uuid.UUID(repository_id)
