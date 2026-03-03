@@ -4,7 +4,8 @@ Loads settings from environment variables with validation.
 """
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List, Optional
+from pydantic import field_validator
+from typing import List, Optional, Any, Union
 import os
 from dotenv import load_dotenv
 
@@ -36,9 +37,17 @@ class Settings(BaseSettings):
     # DigitalOcean Gradient AI
     GRADIENT_ACCESS_KEY: str = os.getenv("GRADIENT_ACCESS_KEY", "")
     GRADIENT_AGENT_URL: str = os.getenv("GRADIENT_AGENT_URL", "")
-    
     # CORS
-    CORS_ORIGINS: List[str] = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173,http://dce.rohitverma.social").split(",")
+    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173", "http://dce.rohitverma.social"]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Any) -> Union[List[str], str]:
+        if isinstance(v, str) and not v.startswith("["):
+            return [i.strip() for i in v.split(",")]
+        elif isinstance(v, (list, str)):
+            return v
+        raise ValueError(v)
     
     # Agent Configuration
     AGENT_MODEL: str = os.getenv("AGENT_MODEL", "claude-3-5-sonnet-20241022")
