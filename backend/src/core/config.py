@@ -7,6 +7,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 from typing import List, Optional, Any, Union
 import os
+from dotenv import load_dotenv
+
+# Explicitly load .env if it exists
+load_dotenv()
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
