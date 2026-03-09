@@ -7,41 +7,45 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
 from typing import List, Optional, Any, Union
 import os
+from dotenv import load_dotenv
+
+# Load .env file explicitly
+load_dotenv()
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
     
     # Application
     APP_NAME: str = "Documentation Consistency Enforcer"
-    DEBUG: bool = False
-    SECRET_KEY: str = "dev_secret_key_change_me_in_production"
+    DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "b111ae2654e33e5e759ee69d44e1d5dce0062d1adc11a59da0a6645d775ea97c")
 
     # Security
-    ADMIN_USERNAME: str = "admin"
-    ADMIN_PASSWORD: str = "admin123"
+    ADMIN_USERNAME: str = os.getenv("ADMIN_USERNAME", "Rohit")
+    ADMIN_PASSWORD: str = os.getenv("ADMIN_PASSWORD", "Rohit@2026")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 1 week
     
     # Database
-    DATABASE_URL: str = "postgresql://user:password@localhost:5432/doc_enforcer"
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/doc_enforcer")
     
     # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     
     # GitHub OAuth
-    GITHUB_CLIENT_ID: str = ""
-    GITHUB_CLIENT_SECRET: str = ""
-    GITHUB_REDIRECT_URI: str = "http://localhost:8000/api/auth/callback"
-    GITHUB_WEBHOOK_SECRET: str = ""
-    GITHUB_TOKEN: str = ""
-    GITHUB_USERNAME: str = ""
+    GITHUB_CLIENT_ID: str = os.getenv("GITHUB_CLIENT_ID", "")
+    GITHUB_CLIENT_SECRET: str = os.getenv("GITHUB_CLIENT_SECRET", "")
+    GITHUB_REDIRECT_URI: str = os.getenv("GITHUB_REDIRECT_URI", "http://localhost:8000/api/auth/callback")
+    GITHUB_WEBHOOK_SECRET: str = os.getenv("GITHUB_WEBHOOK_SECRET", "")
+    GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN", "")
+    GITHUB_USERNAME: str = os.getenv("GITHUB_USERNAME", "")
     
     # DigitalOcean Gradient AI
-    GRADIENT_ACCESS_KEY: str = ""
-    GRADIENT_AGENT_URL: str = ""
+    GRADIENT_ACCESS_KEY: str = os.getenv("GRADIENT_ACCESS_KEY", "")
+    GRADIENT_AGENT_URL: str = os.getenv("GRADIENT_AGENT_URL", "")
     
-    # CORS
-    CORS_ORIGINS: Any = ["http://localhost:3000", "http://localhost:5173"]
+    # CORS (Include production domains in defaults)
+    CORS_ORIGINS: Any = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173,http://dce.rohitverma.social,https://dce.rohitverma.social").split(",")
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -64,7 +68,8 @@ class Settings(BaseSettings):
     SENDGRID_API_KEY: str = ""
 
     model_config = SettingsConfigDict(
-        env_file=None, # Variables provided by Docker ENV
+        env_file=".env",
+        env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore"
     )
